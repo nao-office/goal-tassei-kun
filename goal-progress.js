@@ -91,7 +91,7 @@ window.GoalProgress = (function () {
   }
   function renderReview(ctx) {
     var data=ctx.data,p=data.progress,week=selectedWeek||weekMonday(today()),r=selectedReview(data);
-    var htmlPart='<section class="form-panel"><div class="panelh"><h3>週次ゴールレビュー</h3><span class="chip">VISION → GAP → ACTION</span></div>';
+    var htmlPart='<section class="form-panel" id="pg-review-form"><div class="panelh"><h3>週次ゴールレビュー</h3><span class="chip">VISION → GAP → ACTION</span></div>';
     htmlPart+='<p class="smallmuted">日々の朝・夜の記録を見ながら、事実と課題を整理しよう。同じ週・同じゴールの更新は履歴を残します。</p>';
     htmlPart+='<div class="pg-columns"><div class="pg-field"><label>対象週（月曜日）<input type="date" id="pg-week" value="'+html(week)+'"></label></div><div class="pg-field"><label>対象ゴール'+goalSelect(data.goals||[],selectedGoal,'reviewGoalId')+'</label></div></div>';
     var dates=Object.keys(data.entries||{}).filter(function(d){return d>=week && d<=shiftWeek(week,6);}).sort();
