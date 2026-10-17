@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#162a37">
   <meta name="description" content="未来の自分をイメージし、今日の一歩を決め、成長の差分を残すセルフエフィカシーアプリ">
-  <title>未来の自分｜毎日のゴール達成くん v0.6.0</title>
+  <title>未来の自分｜毎日のゴール達成くん v0.7.0</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="stylesheet" href="goal-progress.css">
   <script src="goal-progress.js"></script>
@@ -59,6 +59,11 @@
     .goal-history-item:last-child{border-bottom:none}.goal-history-item strong{font-size:13px}.goal-history-item p{font-size:12px;color:#556d61;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0}
     .goal-history-item .fine{font-size:11px;color:#819189}
     @media(max-width:650px){.goal-card-grid{grid-template-columns:1fr}.goal-top-stats{gap:5px}.goal-stat{padding:11px}.goal-stat strong{font-size:20px}.goal-filter-bar select{width:100%}}
+
+
+    .goal-idea-content{font-size:15px!important;font-weight:800;color:#25513d;line-height:1.8;white-space:pre-wrap;margin:12px 0!important}
+    .goal-idea-question{font-size:13px;color:#416d55;background:#f1f9f3;border-radius:11px;padding:12px;white-space:pre-wrap;margin:11px 0!important}
+    .goal-idea-card .foot-actions .button{font-size:12px}
   </style>
 </head>
 <body>
@@ -81,6 +86,7 @@
 <input type="file" id="importFile" accept=".json,application/json" hidden>
 <input type="file" id="csvFile" accept=".csv,text/csv" hidden>
 <input type="file" id="lessonCsvFile" accept=".csv,text/csv" hidden>
+<input type="file" id="goalIdeasCsvFile" accept=".csv,text/csv" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
 (function(){
@@ -96,7 +102,8 @@
   const GOAL_HEADERS=["ゴールID","テーマ","期間","定性ゴール","定量ゴール（値・条件）","単位","達成期限","未来の景色","在り方（BE）","ゴールの理由","状態","作成日","最終更新日","最終確認日","メモ"];
   const GOAL_HISTORY_HEADERS=["変更日時（JST）","ゴールID","操作","テーマ","期間","定性ゴール","定量ゴール（値・条件）","単位","達成期限","未来の景色","在り方（BE）","ゴールの理由","状態","変更理由","変更前の更新日時","記録元"];
   const GOAL_CHECK_HEADERS=["確認日時（JST）","ゴールID","テーマ","期間","確認結果","確認メモ"];
-  const initial=()=>({version:1,goal:{title:'',scene:'',identity:'',why:''},goals:[],goalHistory:[],goalChecks:[],progress:GoalProgress.empty(),entries:{},lessons:DEFAULT_LESSONS.map(l=>({...l}))});
+  const GOAL_IDEA_HEADERS=["材料ID","記録日（JST）","テーマ","期間","項目","会話で明らかになった内容","状態","次に確認したい質問","関連ゴールID","出典・会話日","最終更新日（JST）","メモ"];
+  const initial=()=>({version:1,goal:{title:'',scene:'',identity:'',why:''},goals:[],goalHistory:[],goalChecks:[],goalIdeas:[],progress:GoalProgress.empty(),entries:{},lessons:DEFAULT_LESSONS.map(l=>({...l}))});
   const names={home:'ホーム',morning:'朝のセルフエフィカシーワーク',evening:'今日の振り返り',history:'成長の記録',goal:'ゴールの定義',progress:'アクションと週次レビュー',sync:'Google連携'};
   const fieldNames=['fit','normal','futureAction','valuableAction','minimumAction','withoutAction','achievement','growth','tomorrow','lessonReflection','lessonNextStep'];
   let data, tab='home', activeDate=jstToday(),storageError=false, toastTimer,goalPeriodFilter='all',goalThemeFilter='all';
@@ -107,7 +114,7 @@
   function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
   function txt(x){return String(x??'').trim();}
   function cleanString(v){return typeof v==='string'?v.slice(0,4000):'';}
-  function normalize(x){const base=initial();if(!x||typeof x!=='object'||Array.isArray(x))return base;const g=x.goal||{};Object.keys(base.goal).forEach(k=>base.goal[k]=cleanString(g[k]));if(Array.isArray(x.lessons)&&x.lessons.length){const valid=x.lessons.filter(l=>l&&typeof l==='object'&&typeof l.id==='string'&&l.id.length<100).slice(0,800).map(l=>({id:cleanString(l.id),day:cleanString(l.day),title:cleanString(l.title),summary:cleanString(l.summary),question:cleanString(l.question),action:cleanString(l.action),source:cleanString(l.source),url:typeof l.url==='string'&&/^https:\/\//.test(l.url)?l.url.slice(0,700):''}));base.lessons=[...valid,...DEFAULT_LESSONS.filter(def=>!valid.some(v=>v.id===def.id))]}for(const key of ['goals','goalHistory','goalChecks']){if(Array.isArray(x[key]))base[key]=x[key].slice(0,3000).filter(v=>v&&typeof v==='object'&&!Array.isArray(v)).map(v=>Object.fromEntries(Object.entries(v).slice(0,22).map(([k,val])=>[k,cleanString(val)])));}base.progress=GoalProgress.normalize(x.progress);if(!x.entries||typeof x.entries!=='object'||Array.isArray(x.entries))return base;Object.keys(x.entries).slice(0,5000).forEach(k=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(k))return;let src=x.entries[k];if(!src||typeof src!=='object'||Array.isArray(src))return;let e={};fieldNames.forEach(f=>e[f]=cleanString(src[f]));e.minimumDone=src.minimumDone===true;e.valuableDone=src.valuableDone===true;e.reviewed=src.reviewed===true;e.goalSnapshot=cleanString(src.goalSnapshot);e.linkedActionId=cleanString(src.linkedActionId);e.lessonId=cleanString(src.lessonId);e.lessonTitle=cleanString(src.lessonTitle);e.lessonReviewed=src.lessonReviewed===true;e.lessonNotes={};if(src.lessonNotes&&typeof src.lessonNotes==='object'&&!Array.isArray(src.lessonNotes)){Object.entries(src.lessonNotes).slice(0,200).forEach(([id,n])=>{if(!n||typeof n!=='object'||id.length>100)return;e.lessonNotes[id]={reflection:cleanString(n.reflection),nextStep:cleanString(n.nextStep),reviewed:n.reviewed===true};});}base.entries[k]=e;});return base;}
+  function normalize(x){const base=initial();if(!x||typeof x!=='object'||Array.isArray(x))return base;const g=x.goal||{};Object.keys(base.goal).forEach(k=>base.goal[k]=cleanString(g[k]));if(Array.isArray(x.lessons)&&x.lessons.length){const valid=x.lessons.filter(l=>l&&typeof l==='object'&&typeof l.id==='string'&&l.id.length<100).slice(0,800).map(l=>({id:cleanString(l.id),day:cleanString(l.day),title:cleanString(l.title),summary:cleanString(l.summary),question:cleanString(l.question),action:cleanString(l.action),source:cleanString(l.source),url:typeof l.url==='string'&&/^https:\/\//.test(l.url)?l.url.slice(0,700):''}));base.lessons=[...valid,...DEFAULT_LESSONS.filter(def=>!valid.some(v=>v.id===def.id))]}for(const key of ['goals','goalHistory','goalChecks','goalIdeas']){if(Array.isArray(x[key]))base[key]=x[key].slice(0,3000).filter(v=>v&&typeof v==='object'&&!Array.isArray(v)).map(v=>Object.fromEntries(Object.entries(v).slice(0,22).map(([k,val])=>[k,cleanString(val)])));}base.progress=GoalProgress.normalize(x.progress);if(!x.entries||typeof x.entries!=='object'||Array.isArray(x.entries))return base;Object.keys(x.entries).slice(0,5000).forEach(k=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(k))return;let src=x.entries[k];if(!src||typeof src!=='object'||Array.isArray(src))return;let e={};fieldNames.forEach(f=>e[f]=cleanString(src[f]));e.minimumDone=src.minimumDone===true;e.valuableDone=src.valuableDone===true;e.reviewed=src.reviewed===true;e.goalSnapshot=cleanString(src.goalSnapshot);e.linkedActionId=cleanString(src.linkedActionId);e.lessonId=cleanString(src.lessonId);e.lessonTitle=cleanString(src.lessonTitle);e.lessonReviewed=src.lessonReviewed===true;e.lessonNotes={};if(src.lessonNotes&&typeof src.lessonNotes==='object'&&!Array.isArray(src.lessonNotes)){Object.entries(src.lessonNotes).slice(0,200).forEach(([id,n])=>{if(!n||typeof n!=='object'||id.length>100)return;e.lessonNotes[id]={reflection:cleanString(n.reflection),nextStep:cleanString(n.nextStep),reviewed:n.reviewed===true};});}base.entries[k]=e;});return base;}
   function load(){try{const s=localStorage.getItem(KEY);return s?normalize(JSON.parse(s)):initial()}catch(err){storageError=true;return initial()}}
   function save(){try{localStorage.setItem(KEY,JSON.stringify(data));storageError=false;document.querySelectorAll('.storage-warning').forEach(el=>el.remove());return true;}catch(err){storageError=true;showToast('保存できません。ブラウザー設定を確認するかJSONで書き出してください。');return false;}}
   function featuredGoal(longTerm=false){
@@ -147,7 +154,7 @@
   }
   function renderMorning(){const morningGoal=featuredGoal();const e=entry();const other=activeDate!==jstToday();return header('朝のセルフエフィカシーワーク','ゴールを実現する自分の視点から、今日の行動を決める。')+
     (storageError?'<div class="warning storage-warning">このブラウザーでは自動保存を確認できません。必要に応じてデータをエクスポートしてください。</div>':'')+
-    `<div class="stack">${other?`<div class="info">${esc(formatDate(activeDate))} の記録を編集中です。${button('今日に戻る','today','outline')}</div>`:''}
+    `<div class="stack">${other?`<div class="info">${esc(formatDate(activeDate))} の記録を編集中です。${button('今日に戻る','today','outline')}</div>`:''}${renderMorningGoalIdea()}
     <section class="form-panel"><div class="form-heading"><div class="stepno">01</div><div><h3>ゴール側の自分を思い出す</h3><p>今の状況からではなく、達成した未来から考える。</p></div></div><div class="focus-card"><span class="section-label">MY GOAL</span><p>${esc(goalHeadline(morningGoal)||'ゴールが未設定です')}</p>${goalIntro(morningGoal)?`<p class="muted-text" style="font-weight:500">${morningGoal?esc(morningGoal.period+'・'+morningGoal.theme+'：'):''}${esc(goalIntro(morningGoal))}</p>`:''}</div>
     ${field('fit','1. 自分がゴール達成にふさわしい理由は？','例：私は実際にアプリを完成させ、人に使ってもらう行動を起こしてきた。','今の自分に、すでにある資質・経験・事実を探そう。')}
     ${field('normal','2. ゴール達成した自分にとって、何が当たり前？','例：毎朝、利用者の声をもとに価値のある改善を1つ決める。','ゴールを叶えた未来の日常を、具体的に。')}
@@ -173,7 +180,7 @@
     const visible=active.filter(g=>(goalPeriodFilter==='all'||g.period===goalPeriodFilter)&&(goalThemeFilter==='all'||g.theme===goalThemeFilter));
     const link=/^[A-Za-z0-9_-]{20,}$/.test(syncConfig.sheetId)?'https://docs.google.com/spreadsheets/d/'+encodeURIComponent(syncConfig.sheetId)+'/edit':'';
     let out=header('ゴール設定｜未来の自分を定義する','期間 × テーマ × 定性・定量で整理。変更がなければそのまま、気づいたときに更新。');
-    out+='<div class="stack"><section class="form-panel"><div class="panelh"><h3>現在のゴール</h3><span class="chip">Google Sheetsと連携</span></div>';
+    out+='<div class="stack">'+renderGoalIdeas()+'<section class="form-panel"><div class="panelh"><h3>現在のゴール</h3><span class="chip">Google Sheetsと連携</span></div>';
     out+='<div class="goal-top-stats"><div class="goal-stat"><strong>'+active.length+'</strong><span>登録中のゴール</span></div><div class="goal-stat"><strong>'+new Set(active.map(g=>g.theme)).size+'</strong><span>テーマ数</span></div><div class="goal-stat"><strong>'+history.length+'</strong><span>履歴の件数</span></div></div>';
     out+='<p class="muted-text">1つのゴールには定性・定量の片方だけでも、両方でも設定できます。新規登録や更新はChatGPTとの会話かGoogle Sheetsから行い、ここでは閲覧します。直接シートを編集した場合、変更履歴は自動作成されないので注意してください。</p>';
     if(link)out+='<div class="foot-actions"><a href="'+esc(link)+'" target="_blank" rel="noopener noreferrer" class="button secondary">ゴール一覧をGoogle Sheetsで開く ↗</a>'+button('最新情報を同期 ↻','go-sync','outline')+'</div>';
@@ -224,7 +231,8 @@
    <section class="form-panel"><div class="panelh"><h3>③ OAuth設定前の取り込み方法</h3><span class="chip gray">すぐ試せる</span></div><p class="muted-text">シートの「ファイル → ダウンロード → カンマ区切り形式（.csv）」で<strong>「ワーク記録」タブ</strong>を開いた状態で保存し、ここで読み込みます。朝・夜・講義の学び（S～X列）をまとめて取り込めます。Googleアカウント認証の設定なしでも動作します。</p><div class="foot-actions">${button('CSVファイルを取り込む ↑','sync-csv','secondary')}</div></section>
    <section class="form-panel"><div class="panelh"><h3>同期の状態</h3></div><div class="sync-status" id="syncStatus">${syncConfig.lastSync?`前回：${esc(new Date(syncConfig.lastSync).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}))}（${esc(syncConfig.lastMethod)}、取り込み ${Number(syncConfig.lastCount)} 日分）`:'まだ同期していません。朝または夜の記録をChatGPTで保存してから、同期を実行してください。'}</div><p class="sync-small">既存の端末記録は消さず、同じ日付はシート上の入力済み項目を更新します。ただしアプリ側で達成済みになったチェックは解除しません。空欄では削除しません。逆方向（アプリ→シート）の自動保存はありません。同期前にJSONでバックアップすると安心です。</p></section>
    <section class="form-panel"><div class="panelh"><h3>④ 講義の学びも同期する</h3><span class="chip">${data.lessons.length}件登録済み</span></div><p class="muted-text">同じスプレッドシートの「講義の学び」タブも、Google同期時に読み込みます。<b>初期の14件はアプリにも収録済み</b>なので認証前から復習できます。</p><div class="foot-actions">${button('学びのCSVを取り込む ↑','sync-lessons-csv','secondary')}</div><p class="sync-small">「講義の学び」タブを開いてCSVをダウンロードしてください。新しい学びはChatGPT経由でそのタブに追加できます。アプリで直接入力した復習回答はGoogle Sheetsへ自動送信しません。ChatGPTで話して保存した復習結果は、「ワーク記録」タブのS～X列から取り込みます。</p></section>
-   <section class="panel"><div class="panelh"><h3>朝と夜の連携の流れ</h3></div><ol class="sync-steps"><li>朝はChatGPTでセルフエフィカシーワーク → 「今日のワークを保存して」</li><li>夜はChatGPTで行動・成長・講義の学びを振り返る → 「今日の振り返りを保存して」</li><li>ChatGPTからGoogle Sheetsに日付ごと1行で保存（成功したことを確認）</li><li>アプリで「Googleに接続して同期」を押し、朝と夜を取り込む</li></ol><p class="sync-small">ChatGPT側でシートの更新が成功したことを確認してから同期してください。</p></section>
+   <section class="form-panel"><div class="panelh"><h3>⑤ ゴールの種（会話で発見した材料）</h3><span class="chip blue">追加</span></div><p class="muted-text">毎朝の会話で見つけたゴールの材料はGoogle Sheetsの「ゴールの種」タブに蓄積し、Google同期でアプリに表示します。未確定の内容は正式なゴールにはしません。OAuthを使わない場合はこのタブのCSVを取り込めます。</p><div class="foot-actions">${button('ゴールの種CSVを取り込む ↑','sync-goal-ideas-csv','secondary')}${button('ゴール設定を見る →','go-goal','outline')}</div></section>
+    <section class="panel"><div class="panelh"><h3>朝と夜の連携の流れ</h3></div><ol class="sync-steps"><li>朝はChatGPTでセルフエフィカシーワーク → 「今日のワークを保存して」</li><li>夜はChatGPTで行動・成長・講義の学びを振り返る → 「今日の振り返りを保存して」</li><li>ChatGPTからGoogle Sheetsに日付ごと1行で保存（成功したことを確認）</li><li>アプリで「Googleに接続して同期」を押し、朝と夜を取り込む</li></ol><p class="sync-small">ChatGPT側でシートの更新が成功したことを確認してから同期してください。</p></section>
   </div>`;}
   function normalizeDateValue(v){let s=String(v??'').trim();const m=s.match(/^(\d{4})[-\/]([01]?\d)[-\/]([0-3]?\d)$/);if(!m)return '';const d=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;const dt=new Date(d+'T12:00:00+09:00');if(Number.isNaN(+dt)||isoJst(dt)!==d)return '';return d;}
   function parseCheckbox(v){const x=String(v??'').trim().toLowerCase();if(['true','yes','はい','済','1','達成'].includes(x))return true;if(['false','no','いいえ','未','0','未達'].includes(x))return false;return null;}
@@ -272,6 +280,50 @@
   }
   function mergeLessonRows(rows,method){if(!Array.isArray(rows)||!rows.length)throw Error('講義の学びシートに見出しがありません');const header=rows[0].map(v=>String(v??'').replace(/^\uFEFF/,'').trim());if(LESSON_HEADERS.some((v,i)=>v!==header[i]))throw Error('講義の学びシートの見出しが違います');const map=new Map(data.lessons.map(l=>[l.id,l]));let count=0;rows.slice(1,1501).forEach(r=>{const id=txt(r[0]).slice(0,100),title=txt(r[2]);if(!id||!title)return;const obj={id,day:cleanString(r[1]),title:cleanString(r[2]),summary:cleanString(r[3]),question:cleanString(r[4]),action:cleanString(r[5]),source:cleanString(r[6]),url:typeof r[7]==='string'&&r[7].startsWith('https://')?r[7].slice(0,700):''};map.set(id,obj);count++;});data.lessons=[...map.values()].slice(0,800);save();render();showToast(`${count}件の学びを${method}から取り込みました！`);return count;}
 
+  function mergeGoalIdeaRows(rows){
+    if(!rows?.length||GOAL_IDEA_HEADERS.some((v,i)=>String(rows[0]?.[i]??'').trim()!==v))throw Error('ゴールの種の見出しが一致しません');
+    const found=new Map();
+    for(const r of rows.slice(1,2001)){
+      const id=txt(r[0]).slice(0,160);
+      if(!id)continue;
+      found.set(id,{id,date:cleanString(r[1]),theme:cleanString(r[2]),period:cleanString(r[3]),field:cleanString(r[4]),content:cleanString(r[5]),state:cleanString(r[6])||'要確認',question:cleanString(r[7]),goalId:cleanString(r[8]),source:cleanString(r[9]),updated:cleanString(r[10]),memo:cleanString(r[11])});
+    }
+    data.goalIdeas=[...found.values()];
+    save();
+    return data.goalIdeas.length;
+  }
+  function activeGoalIdeas(){
+    return (data.goalIdeas||[]).filter(i=>i.state!=='ゴール反映済み'&&i.state!=='保留').slice().sort((a,b)=>String(b.updated||b.date).localeCompare(String(a.updated||a.date)));
+  }
+  function goalIdeaPrompt(idea){
+    return 'いつもの朝のセルフエフィカシーワークを続けながら、このゴールの材料を一問ずつ深掘りして。既に分かっていることは繰り返し質問せず、期限・定性/定量・未来の景色・在り方・理由で不足している項目を確認して。未確定の内容は勝手に正式なゴールとして扱わない。\nテーマ：'+(idea.theme||'未設定')+'\n項目：'+(idea.field||'未設定')+'\n会話で明らかになった内容：'+(idea.content||'')+'\n次の質問：'+(idea.question||'この内容を今も目指したい？');
+  }
+  function renderGoalIdeaCard(i){
+    return '<article class="goal-card goal-idea-card"><div class="goal-card-top"><span class="title">'+esc(i.theme||'テーマ未設定')+'</span><span class="chip gray">'+esc(i.state||'要確認')+'</span></div>'+
+      '<div class="smallmuted">'+esc(i.field||'ゴールの材料')+' ・ '+esc(i.period||'期間は未決定')+'</div><p class="goal-idea-content">'+esc(i.content)+'</p>'+
+      (i.question?'<p class="goal-idea-question">💬 次に確認すること：'+esc(i.question)+'</p>':'')+
+      (i.source?'<div class="smallmuted">出典：'+esc(i.source)+'</div>':'')+
+      '<div class="foot-actions">'+button('この続きをChatGPTで話す','copy-goal-question','secondary','data-idea-id="'+esc(i.id)+'"')+'</div></article>';
+  }
+  function renderGoalIdeas(){
+    const ideas=Array.isArray(data.goalIdeas)?data.goalIdeas:[],pending=activeGoalIdeas(),confirmed=ideas.filter(x=>x.state==='ゴール反映済み').length;
+    let out='<section class="form-panel" id="goal-ideas"><div class="panelh"><h3>🌱 会話で育てるゴールの種</h3><span class="chip blue">'+ideas.length+'件の材料</span></div>';
+    out+='<p class="muted-text">朝のChatGPTとの会話で出てきた理想・目標・価値観を少しずつ積み上げる場所。<b>「要確認」は正式なゴールではありません。</b> 不明な期間や数値は空欄のまま残します。</p>';
+    out+='<div class="goal-top-stats"><div class="goal-stat"><strong>'+pending.length+'</strong><span>確認・深掘りする材料</span></div><div class="goal-stat"><strong>'+confirmed+'</strong><span>ゴール反映済み</span></div><div class="goal-stat"><strong>'+new Set(ideas.map(i=>i.theme).filter(Boolean)).size+'</strong><span>見つかったテーマ</span></div></div>';
+    if(!ideas.length)out+='<div class="info">まず毎朝のChatGPTとの会話から、ゴールの材料を1つ発見しよう。確認できた内容がシートに記録されると、Google連携でここに表示できます。</div>';
+    else out+='<div class="goal-card-grid">'+pending.slice(0,12).map(renderGoalIdeaCard).join('')+'</div>';
+    if(pending.length>12)out+='<p class="smallmuted">残りの材料はGoogle Sheetsの「ゴールの種」タブで確認できます。</p>';
+    out+='<div class="foot-actions">'+button('Googleから最新情報を取り込む','go-sync','outline')+'</div></section>';
+    return out;
+  }
+  function renderMorningGoalIdea(){
+    const idea=activeGoalIdeas().find(i=>txt(i.question));
+    if(!idea)return '';
+    return '<section class="form-panel"><div class="panelh"><h3>🌱 今日のゴール深掘り（任意）</h3><span class="chip blue">毎朝少しずつ</span></div>'+
+    '<p class="muted-text">いつものワークを止めずに、1つだけ未来の自分のことを考えてみよう。回答はChatGPTとの会話で話してね。</p>'+
+    '<div class="focus-card"><div class="smallmuted">'+esc(idea.theme||'ゴールの材料')+' ・ '+esc(idea.field||'')+'</div><p>'+esc(idea.question)+'</p><p class="smallmuted">前に話したこと：'+esc(idea.content)+'</p></div>'+
+    button('この続きをChatGPTで話す','copy-goal-question','secondary','data-idea-id="'+esc(idea.id)+'"')+'</section>';
+  }
   function mergeGoalRows(rows){
     if(!rows?.length||GOAL_HEADERS.some((v,i)=>String(rows[0]?.[i]??'').trim()!==v))throw Error('ゴール一覧の見出しが一致しません');
     const list=new Map();
@@ -290,7 +342,7 @@
     data.goalChecks=rows.slice(1,2001).filter(r=>txt(r[1])).map(r=>({at:cleanString(r[0]),id:cleanString(r[1]),theme:cleanString(r[2]),period:cleanString(r[3]),result:cleanString(r[4]),note:cleanString(r[5])}));save();return data.goalChecks.length;
   }
   async function fetchGoalSheets(sheetId){
-    const tabs=[["ゴール一覧","A1:O1001",mergeGoalRows],["ゴール履歴","A1:P2001",mergeGoalHistoryRows],["ゴール確認履歴","A1:F2001",mergeGoalCheckRows]];
+    const tabs=[["ゴール一覧","A1:O1001",mergeGoalRows],["ゴール履歴","A1:P2001",mergeGoalHistoryRows],["ゴール確認履歴","A1:F2001",mergeGoalCheckRows],["ゴールの種","A1:L2001",mergeGoalIdeaRows]];
     const errors=[];let total=0;
     for(const [name,range,merge] of tabs){
       try{
@@ -302,7 +354,7 @@
     }
     render();
     if(errors.length)syncStatusMessage('朝・夜の同期は実行しましたが、ゴール情報の一部が未取得：'+errors.join('／'));
-    else syncStatusMessage('Google Sheets同期完了。朝・夜 '+syncConfig.lastCount+'日分、ゴール '+data.goals.length+'件、変更履歴 '+data.goalHistory.length+'件、確認履歴 '+data.goalChecks.length+'件を取得しました。');
+    else syncStatusMessage('Google Sheets同期完了。朝・夜 '+syncConfig.lastCount+'日分、ゴール '+data.goals.length+'件、変更履歴 '+data.goalHistory.length+'件、確認履歴 '+data.goalChecks.length+'件、ゴールの種 '+data.goalIdeas.length+'件を取得しました。');
     return total;
   }
 
@@ -317,8 +369,8 @@
   function showToast(message){const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2800)}
   function exportData(){const json=JSON.stringify({...data,exportedAt:new Date().toISOString()},null,2);const blob=new Blob([json],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`mirai-goal-backup-${jstToday()}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast('バックアップをダウンロードしました。')}
   document.addEventListener('input',ev=>{const target=ev.target;if(target.matches('[data-entry]')){let field=target.dataset.entry;if(!fieldNames.includes(field))return;entry()[field]=target.value;save();}else if(target.matches('[data-config]')){let k=target.dataset.config;if(k!=='clientId'&&k!=='sheetId')return;syncConfig[k]=target.value;googleToken='';saveSyncConfig();}else if(target.matches('[data-goal]')){let field=target.dataset.goal;if(!Object.prototype.hasOwnProperty.call(data.goal,field))return;data.goal[field]=target.value;save();}});
-  document.addEventListener('change',ev=>{if(GoalProgress.change(progressCtx(),ev))return;const t=ev.target;if(t.matches('[data-goal-theme-filter]')){goalThemeFilter=t.value;render();return;}if(t.matches('[data-check]')){let f=t.dataset.check;if(f!=='minimumDone'&&f!=='valuableDone')return;entry()[f]=t.checked;save();showToast(t.checked?'一歩を記録しました！':'チェックを更新しました。');}else if(t.id==='csvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){syncStatusMessage('CSVファイルが大きすぎます（3MB以下）');return;}const reader=new FileReader();reader.onload=()=>{try{mergeSheetRows(parseCsv(String(reader.result)),'CSV');}catch(e){syncStatusMessage('CSV読み込み失敗：'+e.message);showToast('CSV読み込み失敗：'+e.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='lessonCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('CSVファイルが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeLessonRows(parseCsv(String(reader.result)),'CSV');}catch(err){showToast('学びの読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='importFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>2_000_000){showToast('ファイルが大きすぎます（2MB以下）。');return;}const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||parsed.version!==1||typeof parsed.entries!=='object'||typeof parsed.goal!=='object')throw Error('形式');if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;data=normalize(parsed);save();go('home');showToast('バックアップを読み込みました。')}catch(err){showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。')}};reader.readAsText(file);}});
-  document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev))return;const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[e.lessonId]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true};save();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}save();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}e.reviewed=true;save();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
+  document.addEventListener('change',ev=>{if(GoalProgress.change(progressCtx(),ev))return;const t=ev.target;if(t.matches('[data-goal-theme-filter]')){goalThemeFilter=t.value;render();return;}if(t.matches('[data-check]')){let f=t.dataset.check;if(f!=='minimumDone'&&f!=='valuableDone')return;entry()[f]=t.checked;save();showToast(t.checked?'一歩を記録しました！':'チェックを更新しました。');}else if(t.id==='csvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){syncStatusMessage('CSVファイルが大きすぎます（3MB以下）');return;}const reader=new FileReader();reader.onload=()=>{try{mergeSheetRows(parseCsv(String(reader.result)),'CSV');}catch(e){syncStatusMessage('CSV読み込み失敗：'+e.message);showToast('CSV読み込み失敗：'+e.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='goalIdeasCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ゴールの種CSVが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeGoalIdeaRows(parseCsv(String(reader.result)));render();showToast('ゴールの種を読み込みました');}catch(err){showToast('ゴールの種の読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='lessonCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('CSVファイルが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeLessonRows(parseCsv(String(reader.result)),'CSV');}catch(err){showToast('学びの読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='importFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>2_000_000){showToast('ファイルが大きすぎます（2MB以下）。');return;}const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||parsed.version!==1||typeof parsed.entries!=='object'||typeof parsed.goal!=='object')throw Error('形式');if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;data=normalize(parsed);save();go('home');showToast('バックアップを読み込みました。')}catch(err){showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。')}};reader.readAsText(file);}});
+  document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev))return;const ideaButton=ev.target.closest('[data-action="copy-goal-question"]');if(ideaButton){const idea=(data.goalIdeas||[]).find(i=>i.id===ideaButton.dataset.ideaId);if(!idea)return;const prompt=goalIdeaPrompt(idea);if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>showToast('深掘り用の文章をコピーしました。ChatGPTの会話に貼り付けてね。')).catch(()=>showToast('コピーできませんでした。質問を会話で伝えてね。'));}else showToast('質問をChatGPTの会話で伝えてね。');return;}const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'sync-goal-ideas-csv':document.getElementById('goalIdeasCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[e.lessonId]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true};save();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}save();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}e.reviewed=true;save();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
   data=load();syncConfig=loadSyncConfig();render();
 })();
 </script>
