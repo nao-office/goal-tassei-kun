@@ -63,13 +63,13 @@ window.GoalProgress = (function () {
   }
   function renderPlan(ctx) {
     var p=ctx.data.progress, all=actionList(ctx.data),thisWeek=weekMonday(today()),end=shiftWeek(thisWeek,6),nextWeek=shiftWeek(thisWeek,7);
-    var dueThisWeek=all.filter(a=>a.status!=='完了'&&((a.due>=thisWeek&&a.due<=end)||a.plannedWeek===thisWeek||a.horizon==='今週'));
-    var next=all.filter(a=>a.status!=='完了'&&((a.due> end)||(!dueThisWeek.includes(a)&&a.horizon&&a.horizon!=='今週')));
+    var dueThisWeek=all.filter(a=>a.status!=='完了'&&((a.due>=thisWeek&&a.due<=end)||a.plannedWeek===thisWeek||(a.horizon==='今週'&&!a.plannedWeek&&a.updatedAt>=thisWeek&&a.updatedAt<=end)));
+    var next=all.filter(a=>a.status!=='完了'&&((a.due> end)||(!dueThisWeek.includes(a)&&a.horizon&&a.horizon!=='今週')));var overdue=all.filter(a=>a.status!=='完了'&&a.due&&a.due<thisWeek);
     var plans=p.weekPlans.filter(w=>w.week===thisWeek||w.week===nextWeek).sort((a,b)=>a.week.localeCompare(b.week));
     var future=p.actionIdeas.filter(a=>a.status!=='アクション反映済み'&&a.status!=='保留');
     var h='<section class="form-panel"><div class="panelh"><h3>📅 今週のアクション</h3><span class="chip blue">'+dueThisWeek.length+'件</span></div><p class="smallmuted">'+html(thisWeek)+' 〜 '+html(end)+'。期限・今週指定・週の計画から集計。まだ決めていないアクションは勝手に今週へ入れません。</p>';
     h+=dueThisWeek.length?dueThisWeek.map(a=>sectionCard(a.title,'期限 '+(a.due||'未設定')+' ・ '+a.status+'　'+(a.minimum?'最低ライン：'+a.minimum:''),button('朝のワークに使う','today','data-id="'+html(a.id)+'"','secondary')+button('進捗を更新','edit','data-id="'+html(a.id)+'"'))).join(''):'<p class="empty">今週のアクションはまだ確定していないよ。会話の中から重要な一歩を選ぼう。</p>';
-    h+='</section><section class="form-panel"><div class="panelh"><h3>🧭 週間計画（Google Sheets）</h3><span class="chip gray">'+plans.length+'件</span></div>';
+    h+='</section><section class="form-panel"><div class="panelh"><h3>⏳ 期限を過ぎた未完了アクション</h3><span class="chip gray">'+overdue.length+'件</span></div>'+(overdue.length?overdue.map(a=>sectionCard(a.title,'期限：'+a.due+' ／ 状態：'+(a.status||'未着手'),button('今週に取り組む','plan-this-week','data-id="'+html(a.id)+'"','secondary'))).join(''):'<p class="empty">期限超過のアクションはありません。</p>')+'</section><section class="form-panel"><div class="panelh"><h3>🧭 週間計画（Google Sheets）</h3><span class="chip gray">'+plans.length+'件</span></div>';
     h+=plans.length?plans.map(w=>sectionCard(w.week+'｜'+(w.focus||'フォーカス未設定'),'最重要：'+(w.keyAction||'未設定')+'\n最低ライン：'+(w.minimum||'未設定')+'\n状態：'+(w.status||'未設定')+'\n'+(w.result?'進捗：'+w.result:''),(w.keyAction?button('朝のワークへ','plan-today','data-id="'+html(w.id)+'"','secondary'):''))).join(''):'<p class="empty">ChatGPTで今週のフォーカスを決めると、Google Sheets同期後にここへ表示できるよ。</p>';
     h+='</section><section class="form-panel"><div class="panelh"><h3>🌅 これからのアクション</h3><span class="chip gray">'+next.length+'件</span></div>';
     h+=next.length?next.map(a=>sectionCard(a.title,(a.horizon||'期間未設定')+' ・ 期限 '+(a.due||'未設定')+' ・ '+(a.status||'未着手'),button('今週の計画に入れる','plan-this-week','data-id="'+html(a.id)+'"','secondary')+button('編集','edit','data-id="'+html(a.id)+'"'))).join(''):'<p class="empty">将来のアクションは、期限や期間を決めるとここに現れるよ。</p>';
@@ -207,7 +207,7 @@ window.GoalProgress = (function () {
       if(v.due && !/^\d{4}-\d{2}-\d{2}$/.test(v.due)){ctx.toast('期限の形式を確認してください');return true;}
       var old=actionList(ctx.data).find(function(a){return a.id===editing;}),before=old?Object.assign({},old):null;
       var after=Object.assign({},old||{id:uid(),createdAt:now()},v,{updatedAt:now(),completedAt:v.status==='完了'?(old&&old.completedAt||now()):'',origin:old&&old.origin==='Google Sheets'?'端末内の変更':(old&&old.origin||'端末内')});
-      delete after.reason;
+      delete after.reason;if(after.horizon==='今週'&&!after.plannedWeek)after.plannedWeek=weekMonday(today());
       var localIndex=p.actions.findIndex(x=>x.id===after.id);if(localIndex>=0)p.actions[localIndex]=after;else p.actions.push(after);
       p.actionHistory.push({at:now(),id:after.id,reason:v.reason||(old?'更新':'新規登録'),before:before,after:Object.assign({},after)});
       editing='';prefillIdea=null;var ok=ctx.save();ctx.render();ctx.toast(ok?'アクションを保存したよ':'この端末に保存できませんでした');return true;
