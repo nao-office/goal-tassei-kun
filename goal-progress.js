@@ -157,13 +157,13 @@ window.GoalProgress = (function () {
       delete after.reason;
       if(old){p.actions[p.actions.indexOf(old)]=after;}else p.actions.push(after);
       p.actionHistory.push({at:now(),id:after.id,reason:v.reason||(old?'更新':'新規登録'),before:before,after:Object.assign({},after)});
-      editing='';ctx.save();ctx.render();ctx.toast('アクションを保存したよ');return true;
+      editing='';var ok=ctx.save();ctx.render();ctx.toast(ok?'アクションを保存したよ':'この端末に保存できませんでした');return true;
     }
     if(kind==='toggle'){
       var a=p.actions.find(function(x){return x.id===id;});if(!a)return true;
       var beforeToggle=Object.assign({},a);a.status=a.status==='完了'?'未着手':'完了';a.updatedAt=now();a.completedAt=a.status==='完了'?now():'';
       p.actionHistory.push({at:now(),id:a.id,reason:'進捗を更新',before:beforeToggle,after:Object.assign({},a)});
-      ctx.save();ctx.render();ctx.toast('進捗を更新したよ');return true;
+      var toggled=ctx.save();ctx.render();ctx.toast(toggled?'進捗を更新したよ':'この端末に保存できませんでした');return true;
     }
     if(kind==='today'){
       var a=p.actions.find(function(x){return x.id===id;});if(!a)return true;
@@ -181,7 +181,7 @@ window.GoalProgress = (function () {
       delete review.reason;
       if(oldR.id)p.reviews[p.reviews.indexOf(oldR)]=review;else p.reviews.push(review);
       p.reviewHistory.push({at:now(),id:review.id,reason:w.reason||(oldR.id?'週次レビュー更新':'初回レビュー'),before:beforeR,after:Object.assign({},review)});
-      ctx.save();ctx.render();ctx.toast('週次レビューを保存したよ');return true;
+      var reviewed=ctx.save();ctx.render();ctx.toast(reviewed?'週次レビューを保存したよ':'この端末に保存できませんでした');return true;
     }
     if(kind==='review-to-today'){
       var r=selectedReview(ctx.data);if(r.keyAction)ctx.toMorning(r.keyAction,r.minimum,'',r.goalId);return true;
