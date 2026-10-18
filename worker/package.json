@@ -1,0 +1,1 @@
+{"name":"goal-tassei-auth-worker","private":true,"type":"module","scripts":{"test":"node --test auth.test.js"},"engines":{"node":">=20"}}
