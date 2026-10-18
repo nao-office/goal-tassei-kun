@@ -1,0 +1,14 @@
+# Copy to wrangler.toml (do not commit secrets or your real namespace ID).
+name = "goal-tassei-auth"
+main = "index.js"
+compatibility_date = "2026-10-18"
+
+[[kv_namespaces]]
+binding = "AUTH_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+APP_ORIGIN = "https://nao-office.github.io"
+APP_RETURN_URL = "https://nao-office.github.io/goal-tassei-kun/"
+# GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ALLOWED_EMAIL,
+# AUTH_ENCRYPTION_KEY must be set with: npx wrangler secret put NAME

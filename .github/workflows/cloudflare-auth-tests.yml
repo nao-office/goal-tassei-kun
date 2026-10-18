@@ -1,0 +1,32 @@
+name: Cloudflare auth tests
+on:
+  pull_request:
+    paths:
+      - 'worker/**'
+      - 'index.html'
+      - '.github/workflows/cloudflare-auth-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - 'index.html'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test Worker OAuth flow
+        run: node --test worker/auth.test.js
+      - name: Parse browser inline script
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const html=fs.readFileSync('index.html','utf8');
+          const inline=html.match(/<script>([\s\S]*?)<\/script>/);
+          if(!inline)throw Error('Inline script not found');
+          new Function(inline[1]);
+          console.log('index.html JavaScript syntax OK');
+          NODE
