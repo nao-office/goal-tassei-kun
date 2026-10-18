@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#162a37">
   <meta name="description" content="未来の自分をイメージし、今日の一歩を決め、成長の差分を残すセルフエフィカシーアプリ">
-  <title>未来の自分｜毎日のゴール達成くん v0.8.0</title>
+  <title>未来の自分｜毎日のゴール達成くん v0.9.0</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="stylesheet" href="goal-progress.css">
   <script src="goal-progress.js"></script>
@@ -97,6 +97,7 @@
   const DEFAULT_LESSONS=[{"id":"DAY0-BE","day":"Day0","title":"在り方は今この瞬間に選び直せる","summary":"理想の未来の自分を思い描き、今の態度・行動がその自分にふさわしいかを見直す。違えば今ここで選び直す。","question":"今日、未来の自分ならどんな在り方（BE）を選ぶ？","action":"一場面だけ、オープン・正直・素直な関わりを選ぶ","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY1-TRY","day":"Day1","title":"失敗前提で、考えるより先に動く","summary":"思考や準備だけで終わらせず、未完成でも動く。失敗は挑戦の経験値として扱う。","question":"今日、準備を待たずに実行できる最初の一歩は？","action":"5分だけ試す・誰かに見せる","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY2-STRENGTH","day":"Day2","title":"無意識の強みを、具体的な行動から見つける","summary":"自分には自然にできている行動を観察し、その行動が周囲に与える価値を言葉にする。","question":"今日、自然にできたことで誰かに役立ったことは？","action":"当たり前にできた行動を1つメモする","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY3-CHOICE","day":"Day3","title":"過去ではなく未来の自分を判断軸にする","summary":"過去の経験から可能性を狭めるのではなく、ゴールを達成した自分の視点で今日の選択を決める。","question":"今日の選択は、ゴール側の自分も同じように選ぶ？","action":"迷った選択を未来の自分の視点で一度考え直す","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY4-TWO-FUTURES","day":"Day4","title":"現状維持と決断後、2つの未来を見る","summary":"何も変えない未来と決断した未来を両方想像し、未来の自分が感謝する選択を今日する。","question":"今日の選択を続けると、半年後にどんな差が生まれる？","action":"未来の自分が感謝する小さな選択を1つ実行する","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY4-GOAL","day":"Day4","title":"ゴールに定性・定量・期日を与える","summary":"なぜ実現するか、どこまで実現するか、いつまでに実現するかを明確にして今日の一歩を逆算する。","question":"自分のゴールの『なぜ・どこまで・いつまで』は言葉になっている？","action":"ゴールの達成条件を1行で書き直す","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY4-FUTURE","day":"Day4","title":"未来の自分が『今日の俺、よくやった』と思う行動","summary":"『最高の1日』と抽象的に考えるより、未来の自分が感謝する行動を今日具体的に選ぶ。","question":"未来の自分が今夜『よくやった』と思う行動は何？","action":"その一歩を今日の予定に入れる","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY5-CONTROL","day":"Day5","title":"アクションは100%自分でコントロールできる形に","summary":"売上や相手からの返事を行動目標にせず、日時・件数・完了条件まで落とし込んだ自分が実行できる行動にする。","question":"今日のアクションは、自分の意思と行動だけで完了できる？","action":"目標を10分で完了できる具体的な動作にする","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY5-LOOP","day":"Day5","title":"動く → 振り返る → 次の一手を決める","summary":"完璧な計画を先に作るより、行動して振り返り、翌日のアクションを更新する流れを毎日回す。","question":"今日の行動から何が分かり、次は何を試す？","action":"今日試したことと明日の一手を1行ずつ残す","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY5-CENTER","day":"Day5","title":"センターピンは動きながら見つける","summary":"何が一番ゴールに効くか分からず止まるのではなく、まず動き、振り返りを通して価値の高い行動を見つける。","question":"今、ゴールに効きそうな『まず試すこと』は何？","action":"小さな仮説を1つ実験する","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY6-REAL","day":"Day6","title":"達成後の場面の臨場感を高める","summary":"利用者の声や使われる場面を具体的に思い描くことで、ゴールを単なる数字でなく実現したい未来として捉える。","question":"あなたのアプリを使った人は、どんな場面で喜んでいる？","action":"誰が・どこで・何を喜ぶかを1場面書く","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY7-DIFF","day":"Day7","title":"100日前の自分との差分を受け取る","summary":"不足ばかり見るのではなく、BE（在り方）・DO（行動）・HAVE（結果）の観点で自分の変化を確認し、これから再現できる力にする。","question":"過去の自分と比べて、いま当たり前にできるようになったことは？","action":"BE・DO・HAVEそれぞれの成長を1つずつ言葉にする","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY7-RELATE","day":"Day7","title":"人を頼り、本音で深く関わる","summary":"一人で完結させず、自分から伝えて周囲を頼る。相手と本音で関わる経験が、これからも使える資産になる。","question":"今日、誰に本音を伝えたり、助けを頼んだりできた？","action":"一人に率直な気持ちや依頼を言葉にする","source":"講義の学び（初期サンプル）","url":""},{"id":"DAY7-SELF-TALK","day":"Day7","title":"ゴール側の自分のセルフトークを選ぶ","summary":"過去の『できなかった自分』から判断せず、未来の自分なら今どう考え何をするかを問い直す。","question":"今、俺は自分に何て言ってる？ それ、ゴール側の俺も言う？ なら今何する？","action":"立ち止まった場面で3つの問いを実践する","source":"講義の学び（初期サンプル）","url":""}];
   const SYNC_KEY='mirai-goal-sheet-sync-config-v1';
   const WRITE_BASELINE_KEY='mirai-goal-sheet-write-baseline-v1:';
+  const PRE_SYNC_BACKUP_KEY='mirai-goal-pre-writeback-backup-v1:';
   // OAuth client IDs are public identifiers (not client secrets).
   // Add the existing Web OAuth client ID here before merging this feature.
   // Never put private spreadsheet IDs or user records in the repository.
@@ -235,6 +236,16 @@
   function saveSyncConfig(){try{localStorage.setItem(SYNC_KEY,JSON.stringify(syncConfig));}catch(e){showToast('同期設定を保存できませんでした。');}}
   function loadWriteBaseline(){try{const s=localStorage.getItem(WRITE_BASELINE_KEY+syncConfig.sheetId);const b=s?JSON.parse(s):null;return b?.version===1?b:null;}catch(e){return null;}}
   function saveWriteBaseline(){try{localStorage.setItem(WRITE_BASELINE_KEY+syncConfig.sheetId,JSON.stringify(writeBaseline));return true;}catch(e){syncStatusMessage('同期結果の基準情報を端末に保存できませんでした。JSONバックアップを作成してください');return false;}}
+  function protectOriginalLocalData(){
+    if(writeBaseline)return;
+    const key=PRE_SYNC_BACKUP_KEY+syncConfig.sheetId;
+    try{
+      if(localStorage.getItem(key))return;
+      localStorage.setItem(key,JSON.stringify({...data,originalSavedAt:new Date().toISOString()}));
+    }catch(error){
+      throw Error('既存の端末記録を自動バックアップできません。先にJSONバックアップを書き出してください');
+    }
+  }
   function reconcileActionOverlays(rows){
     const m=new Map(rows.slice(1).filter(r=>r[0]).map(r=>[r[0],r]));
     (data.progress?.actions||[]).forEach(a=>{
@@ -258,6 +269,7 @@
           googleToken=response.access_token;
           try{
             syncStatusMessage('Google Sheetsの最新データと変更の競合を確認中…');
+            protectOriginalLocalData();
             const result=await GoalWriteback.commit({sheetId:syncConfig.sheetId,token:googleToken,data,baseline:writeBaseline});
             // Save the verified server revision as the baseline before performing a regular pull.
             writeBaseline=GoalWriteback.baselineFromRows(result.workRows,result.actionRows);
@@ -277,7 +289,7 @@
   }
   function renderSync(){const connected=Boolean(googleToken);return header('ChatGPTとGoogle Sheetsをつなぐ','朝の宣言も、夜の振り返りも。会話の結果をこのアプリへ取り込もう。')+`<div class="stack">
    <section class="form-panel"><div class="panelh"><h3>① 記録先のGoogleスプレッドシート</h3><span class="chip gray">自分だけの設定</span></div><p class="muted-text">シートは非公開のままで大丈夫。Google SheetsのURLにある <code>/d/</code> と <code>/edit</code> の間のIDだけをここに入力してください。設定はまずブラウザー内に保存し、Google接続時にGoogle Driveのアプリ専用領域へ安全に共有します。GitHubの公開コードには含まれません。</p><div class="field"><label for="sheetId">GoogleスプレッドシートのID</label><input id="sheetId" type="text" maxlength="4000" data-config="sheetId" placeholder="シートのURLにある長い英数字" value="${esc(syncConfig.sheetId)}" autocomplete="off"></div><div class="sync-kv"><div><strong>セルフエフィカシーワーク記録</strong><div class="sync-small">朝の記録・夜の振り返り・講義の学びを同期</div></div>${/^[a-zA-Z0-9_-]{20,}$/.test(syncConfig.sheetId)?`<a class="button outline" href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(syncConfig.sheetId)}/edit" target="_blank" rel="noopener noreferrer">シートを開く ↗</a>`:'<span class="smallmuted">シートIDを入力してください</span>'}</div></section>
-   <section class="form-panel"><div class="panelh"><h3>② Googleから記録を同期</h3><span class="${connected?'chip':'chip gray'}">${connected?'この画面では認証済み':'Google認証が必要'}</span></div><p class="muted-text">Google公式ログインで<strong>スプレッドシートの読み取り専用権限</strong>を取得します。この権限の許可範囲はGoogle Sheets全体ですが、アプリが実際に読み込むのは上記の専用シートのみです。認証トークンはブラウザーに永続保存しません。</p><div class="field"><label for="clientId">Google Cloudで作成したOAuthクライアントID</label><p class="hint">アプリ共通のOAuthクライアントIDが登録済みなら入力不要です。Google Sheets APIとGoogle Drive APIを有効化し、アプリの公開URLを「承認済みの JavaScript 生成元」に登録してください。</p><input id="clientId" type="text" maxlength="4000" data-config="clientId" placeholder="123456789-xxxx.apps.googleusercontent.com" value="${esc(syncConfig.clientId)}" autocomplete="off"></div><div class="foot-actions">${button('Googleに接続して同期 ↻','google-sync','dark')}${button('Google Sheetsに保存して同期 ↑','save-writeback','secondary')}${button('接続設定の説明','setup-guide','outline')}</div><p class="sync-small">ローカルの file:// で開いた場合はGoogle認証が動作しません。GitHub PagesなどのHTTPSサイトに公開してから利用してください。ログイン後も、新しい記録はボタンで再同期します。シートIDは最初に連携した端末からGoogle Driveのアプリ専用領域に保存され、同じGoogleアカウントで別端末からログインすると自動取得します。Google Drive APIの有効化が必要です。</p></section>
+   <section class="form-panel"><div class="panelh"><h3>② Googleから記録を同期</h3><span class="${connected?'chip':'chip gray'}">${connected?'この画面では認証済み':'Google認証が必要'}</span></div><p class="muted-text">Google公式ログインで<strong>スプレッドシートの読み取り専用権限</strong>を取得します。この権限の許可範囲はGoogle Sheets全体ですが、アプリが実際に読み込むのは上記の専用シートのみです。認証トークンはブラウザーに永続保存しません。</p><div class="field"><label for="clientId">Google Cloudで作成したOAuthクライアントID</label><p class="hint">アプリ共通のOAuthクライアントIDが登録済みなら入力不要です。Google Sheets APIとGoogle Drive APIを有効化し、アプリの公開URLを「承認済みの JavaScript 生成元」に登録してください。</p><input id="clientId" type="text" maxlength="4000" data-config="clientId" placeholder="123456789-xxxx.apps.googleusercontent.com" value="${esc(syncConfig.clientId)}" autocomplete="off"></div><div class="foot-actions">${button('Googleに接続して同期 ↻','google-sync','dark')}${button('Google Sheetsに保存して同期 ↑','save-writeback','secondary')}${button('端末のJSONバックアップ','export','outline')}${button('接続設定の説明','setup-guide','outline')}</div><p class="sync-small">ローカルの file:// で開いた場合はGoogle認証が動作しません。GitHub PagesなどのHTTPSサイトに公開してから利用してください。ログイン後も、新しい記録はボタンで再同期します。シートIDは最初に連携した端末からGoogle Driveのアプリ専用領域に保存され、同じGoogleアカウントで別端末からログインすると自動取得します。Google Drive APIの有効化が必要です。</p></section>
    <section class="form-panel"><div class="panelh"><h3>③ OAuth設定前の取り込み方法</h3><span class="chip gray">すぐ試せる</span></div><p class="muted-text">シートの「ファイル → ダウンロード → カンマ区切り形式（.csv）」で<strong>「ワーク記録」タブ</strong>を開いた状態で保存し、ここで読み込みます。朝・夜・講義の学び（S～X列）をまとめて取り込めます。Googleアカウント認証の設定なしでも動作します。</p><div class="foot-actions">${button('CSVファイルを取り込む ↑','sync-csv','secondary')}</div></section>
    <section class="form-panel"><div class="panelh"><h3>同期の状態</h3></div><div class="sync-status" id="syncStatus">${syncConfig.lastSync?`前回：${esc(new Date(syncConfig.lastSync).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}))}（${esc(syncConfig.lastMethod)}、取り込み ${Number(syncConfig.lastCount)} 日分）`:'まだ同期していません。朝または夜の記録をChatGPTで保存してから、同期を実行してください。'}</div><p class="sync-small">Googleに接続して同期：シートから読み込み。Google Sheetsに保存して同期：この端末で編集した朝・夜のワークとアクションを確認して書き戻し（確認画面あり）。競合時は勝手に上書きせず中止します。アプリ内だけの追加項目・週次レビューはまだ書き戻せません。大切な記録はJSONバックアップも取ってください。</p></section>
    <section class="form-panel"><div class="panelh"><h3>④ 講義の学びも同期する</h3><span class="chip">${data.lessons.length}件登録済み</span></div><p class="muted-text">同じスプレッドシートの「講義の学び」タブも、Google同期時に読み込みます。<b>初期の14件はアプリにも収録済み</b>なので認証前から復習できます。</p><div class="foot-actions">${button('学びのCSVを取り込む ↑','sync-lessons-csv','secondary')}</div><p class="sync-small">「講義の学び」タブを開いてCSVをダウンロードしてください。新しい学びはChatGPT経由でそのタブに追加できます。アプリで直接入力した復習回答は「Google Sheetsに保存して同期」を押した時だけ書き戻します。ChatGPTで話して保存した復習結果は、「ワーク記録」タブのS～X列から取り込みます。</p></section>
@@ -458,6 +470,7 @@
       if(res.status===401){googleToken='';throw Error('ログインの有効期限が切れました。もう一度接続してください');}
       if(!res.ok){let detail='';try{const body=await res.json();detail=body.error?.message||'';}catch(e){}throw Error('シートを読めませんでした（'+res.status+'）'+(detail?'：'+detail:''));}
       const body=await res.json();
+      protectOriginalLocalData();
       mergeSheetRows(body.values||[],'Google Sheets');
       const lRange=encodeURIComponent("'講義の学び'!A1:H1501");
       const lRes=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(sheetId)+'/values/'+lRange+'?valueRenderOption=FORMATTED_VALUE',{headers:{Authorization:'Bearer '+googleToken}});
