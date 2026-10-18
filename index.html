@@ -267,6 +267,23 @@
     if(syncBusy||writeBusy)return;
     if(!/^[A-Za-z0-9_-]{20,}$/.test(txt(syncConfig.sheetId))){syncStatusMessage('先に通常のGoogle同期で保存先を設定してください');return;}
     if(!confirm('この端末で編集した朝・夜のワークとアクションをGoogle Sheetsに保存します。ほかの端末の変更と競合する場合は保存しません。実行しますか？'))return;
+    if(cloudWorkerUrl&&cloudSession){
+      if(!googleToken){syncStatusMessage('自動接続を復旧しています。少し待ってから保存してください');autoSyncEnabled=true;try{localStorage.setItem(AUTO_SYNC_KEY,'1');}catch(e){}restoreCloudSession();return;}
+      writeBusy=true;
+      try{
+        syncStatusMessage('Google Sheetsの最新データと変更の競合を確認中…');
+        protectOriginalLocalData();
+        const result=await GoalWriteback.commit({sheetId:syncConfig.sheetId,token:googleToken,data,baseline:writeBaseline});
+        writeBaseline=GoalWriteback.baselineFromRows(result.workRows,result.actionRows);
+        if(!saveWriteBaseline())throw Error('同期の基準情報を保存できませんでした');
+        mergeSheetRows(result.workRows,'Google Sheets');
+        reconcileActionOverlays(result.actionRows);
+        GoalProgress.importSheet('アクション一覧',result.actionRows,data,save);
+        syncStatusMessage(result.count?result.count+'項目をGoogle Sheetsへ保存し、読み直して確認できました':'変更はありません。最新データを確認しました');
+      }catch(error){syncStatusMessage('書き戻しを中止：'+error.message);}
+      finally{writeBusy=false;updateAutoSyncNotice();}
+      return;
+    }
     if(!window.google?.accounts?.oauth2){syncStatusMessage('Google認証ライブラリが読み込めません');return;}
     const clientId=txt(syncConfig.clientId||DEFAULT_OAUTH_CLIENT_ID);
     writeBusy=true;syncStatusMessage('Googleへの書き込み権限を確認中…');
@@ -818,6 +835,12 @@
   }
   function startGoogleSync(){
     if(syncBusy)return;
+    if(cloudWorkerUrl&&cloudSession){
+      if(googleToken)fetchSheetRows();
+      else{autoSyncEnabled=true;try{localStorage.setItem(AUTO_SYNC_KEY,'1');}catch(e){}autoRetryAfter=0;restoreCloudSession();}
+      return;
+    }
+    if(cloudWorkerUrl&&!cloudSession){startCloudAuth();return;}
     const id=txt(syncConfig.clientId||DEFAULT_OAUTH_CLIENT_ID);
     if(!/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(id)){syncStatusMessage('共通のOAuthクライアントIDが未設定です。設定するまでは既存のIDを入力してください');return;}
     if(location.protocol==='file:'){syncStatusMessage('Google認証は file:// では利用できません。HTTPSでアプリを開いてください');return;}
