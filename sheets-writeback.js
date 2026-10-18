@@ -4,6 +4,7 @@
 window.GoalWriteback=(function(){
   'use strict';
   const WORK_HEADERS=['日付','ゴール達成にふさわしい理由','ゴール側の自分の当たり前','未来の自分が喜ぶ行動','最も価値のある行動','最低限の完了ライン','行動しなかった未来','最低限を達成','価値のある行動を実行','今日できたこと','以前の自分との差分','明日の一歩','振り返り完了','ゴール','未来の景色','在り方（BE）','ゴールの理由','更新日時','復習した学びID','復習した学びテーマ','講義の学び：今日の気づき','講義の学び：明日の実践','講義の学び：復習完了','夜の記録更新日時'];
+  const ACTION_HISTORY_HEADERS=['変更日時（JST）','操作','アクションID','関連ゴールID','テーマ','アクション名','最低限の完了ライン','完了条件・成果指標','予定開始日','期限','期間区分','優先度','状態','進捗メモ','技術課題','適応課題','作成日（JST）','最終更新日（JST）','完了日（JST）','記録元','変更理由'];
   const ACTION_HEADERS=['アクションID','関連ゴールID','テーマ','アクション名','最低限の完了ライン','完了条件・成果指標','予定開始日','期限','期間区分','優先度','状態','進捗メモ','技術課題','適応課題','作成日（JST）','最終更新日（JST）','完了日（JST）','記録元'];
   const WF={1:'fit',2:'normal',3:'futureAction',4:'valuableAction',5:'minimumAction',6:'withoutAction',7:'minimumDone',8:'valuableDone',9:'achievement',10:'growth',11:'tomorrow',12:'reviewed',18:'lessonId',19:'lessonTitle',20:'lessonReflection',21:'lessonNextStep',22:'lessonReviewed'};
   const AF={0:'id',1:'goalId',2:'theme',3:'title',4:'minimum',5:'expected',6:'start',7:'due',8:'horizon',9:'priority',10:'status',11:'note',12:'technical',13:'adaptive',14:'createdAt',15:'updatedAt',16:'completedAt',17:'source'};
@@ -116,6 +117,32 @@ window.GoalWriteback=(function(){
     }
     return grouped.size;
   }
+  function actionHistoryRow(item){
+    const a=item.after||{};
+    const row=[item.at,item.reason||'更新',a.id||item.id,a.goalId,a.theme,a.title,a.minimum,a.expected,
+      a.start,a.due,a.horizon,a.priority,a.status,a.note,a.technical,a.adaptive,
+      a.createdAt,a.updatedAt,a.completedAt,'ゴール達成くん（アプリ）',item.reason||'更新'];
+    return row.map(x=>String(x??''));
+  }
+  async function writeActionHistory(sheetId,token,history){
+    const rows=await read(sheetId,token,'アクション履歴','U5001');
+    validateHeader(rows,ACTION_HISTORY_HEADERS,'アクション履歴');
+    const known=new Set(rows.slice(1).map(r=>[r[0]||'',r[2]||'',r[20]||''].join('\u0001')));
+    const additions=[],seen=new Set();
+    for(const item of (history||[])){
+      if(!item?.at||!item?.id||!item.after)continue;
+      const row=actionHistoryRow(item),signature=[row[0],row[2],row[20]].join('\u0001');
+      if(known.has(signature)||seen.has(signature))continue;
+      seen.add(signature);additions.push(row);
+    }
+    const url=root(sheetId)+encodeURIComponent("'アクション履歴'!A1:U")
+      +':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS';
+    for(let n=0;n<additions.length;n+=50){
+      await request(url,token,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({values:additions.slice(n,n+50)})});
+    }
+    return additions.length;
+  }
   async function commit({sheetId,token,data,baseline}){
     if(!/^[A-Za-z0-9_-]{20,}$/.test(sheetId))throw Error('スプレッドシートIDが未設定です');
     if(!token)throw Error('Google認証が必要です');
@@ -126,7 +153,9 @@ window.GoalWriteback=(function(){
     const a=differences(localActions,baseline?.actions||{},remoteActions,'action');
     const conflicts=[...new Set([...w.conflicts,...a.conflicts])];
     if(conflicts.length)throw Error('他の端末／ChatGPTと変更が重複しています。自動上書きせず中止しました：'+conflicts.slice(0,5).join('、')+(conflicts.length>5?' ほか':''));
-    if(!w.output.length&&!a.output.length)return {count:0,...live};
+    // Changes from the app's action log are appended, never replaced.
+    // Do this even after an interrupted previous attempt in which the main action row was written.
+    if(!w.output.length&&!a.output.length){const h=await writeActionHistory(sheetId,token,data.progress?.actionHistory);return {count:h,...live};}
     // One user-triggered attempt. A failed partial attempt is safe to retry: cells already
     // equal the requested value are skipped, and new IDs are found on the next read.
     let changed=0;
@@ -134,6 +163,7 @@ window.GoalWriteback=(function(){
     changed+=await appendNew(sheetId,token,w.output,remoteWork,'ワーク記録',24);
     changed+=await writeExisting(sheetId,token,a.output,remoteActions,'アクション一覧',18);
     changed+=await appendNew(sheetId,token,a.output,remoteActions,'アクション一覧',18);
+    changed+=await writeActionHistory(sheetId,token,data.progress?.actionHistory);
     const after=await load(sheetId,token);
     const rowsW=mapRows(after.workRows,24),rowsA=mapRows(after.actionRows,18);
     for(const p of w.output)if(cell(rowsW[p.id]?.values[p.index],BOOL.has(p.index))!==p.value)throw Error('ワーク記録の書き込み確認に失敗しました');
