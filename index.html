@@ -108,7 +108,7 @@
   const EXPECTED_HEADERS=['日付','ゴール達成にふさわしい理由','ゴール側の自分の当たり前','未来の自分が喜ぶ行動','最も価値のある行動','最低限の完了ライン','行動しなかった未来','最低限を達成','価値のある行動を実行','今日できたこと','以前の自分との差分','明日の一歩','振り返り完了','ゴール','未来の景色','在り方（BE）','ゴールの理由','更新日時'];
   const EVENING_HEADERS=['復習した学びID','復習した学びテーマ','講義の学び：今日の気づき','講義の学び：明日の実践','講義の学び：復習完了','夜の記録更新日時'];
   let syncConfig={sheetId:'',clientId:'',lastSync:'',lastCount:0,lastMethod:''}, googleToken='', syncBusy=false, writeBusy=false, writeBaseline=null;
-  let autoSyncEnabled=false,autoWriteToken=false,autoTokenExpiresAt=0,autoAuthBusy=false,autoSyncBlocked=false,autoSilentRetryAt=0,autoSaveTimer=null,autoSilentSync=false,autoRenderDeferred=false;
+  let autoSyncEnabled=false,autoWriteToken=false,autoTokenExpiresAt=0,autoAuthBusy=false,autoSyncBlocked=false,autoSilentRetryAt=0,autoSaveTimer=null,autoSilentSync=false,autoRenderDeferred=false,autoRetryAfter=0;
   const GOAL_PERIODS=["1か月","3か月","1年","3年","5年"];
   const GOAL_HEADERS=["ゴールID","テーマ","期間","定性ゴール","定量ゴール（値・条件）","単位","達成期限","未来の景色","在り方（BE）","ゴールの理由","状態","作成日","最終更新日","最終確認日","メモ"];
   const GOAL_HISTORY_HEADERS=["変更日時（JST）","ゴールID","操作","テーマ","期間","定性ゴール","定量ゴール（値・条件）","単位","達成期限","未来の景色","在り方（BE）","ゴールの理由","状態","変更理由","変更前の更新日時","記録元"];
@@ -307,7 +307,7 @@
   function scheduleAutoSave(){
     if(!autoSyncEnabled||autoSyncBlocked||!autoPending())return;
     clearTimeout(autoSaveTimer);
-    autoSaveTimer=setTimeout(()=>{autoSyncTick();},1800);
+    autoSaveTimer=setTimeout(()=>{autoSyncTick();},Math.max(1800,autoRetryAfter-Date.now()));
   }
   function applyRemoteClears(rows){
     // The original importer intentionally keeps empty cells. For records with a
@@ -382,8 +382,10 @@
       syncConfig.lastMethod='自動保存';
       saveSyncConfig();
       mergeAfterAutoCommit(result.workRows,result.actionRows,snapshot,previousBaseline);
+      autoRetryAfter=0;
       syncStatusMessage('自動保存完了：'+new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'}));
     }catch(error){
+      autoRetryAfter=Date.now()+60000;
       if(/変更が重複|見出しが想定と違|同じID／日付/.test(error.message))autoSyncBlocked=true;
       if(/API 401|API 403/.test(error.message))autoWriteToken=false;
       syncStatusMessage('自動保存を停止しました：'+error.message+'。記録はこの端末に残っています。');
@@ -393,7 +395,7 @@
     }
   }
   async function autoSyncTick(){
-    if(!autoSyncEnabled||autoSyncBlocked||!autoWriteToken||!googleToken||syncBusy||writeBusy||document.hidden)return;
+    if(!autoSyncEnabled||autoSyncBlocked||!autoWriteToken||!googleToken||syncBusy||writeBusy||document.hidden||Date.now()<autoRetryAfter)return;
     if(Date.now()>=autoTokenExpiresAt){
       autoWriteToken=false;
       syncStatusMessage('Google認証の期限が切れました。自動再接続を試みます。');
@@ -439,6 +441,7 @@
           autoTokenExpiresAt=Date.now()+Math.max(60,(Number(response.expires_in)||3600)-90)*1000;
           autoSyncEnabled=true;
           autoSyncBlocked=false;
+          autoRetryAfter=0;
           try{localStorage.setItem(AUTO_SYNC_KEY,'1');}catch(e){}
           if(tab==='sync')render();
           autoSyncTick();
@@ -643,6 +646,19 @@
       if(res.status===401){googleToken='';throw Error('ログインの有効期限が切れました。もう一度接続してください');}
       if(!res.ok){let detail='';try{const body=await res.json();detail=body.error?.message||'';}catch(e){}throw Error('シートを読めませんでした（'+res.status+'）'+(detail?'：'+detail:''));}
       const body=await res.json();
+      // Check both sheets before mutating local data. Deleted remote rows must
+      // never be silently recreated by the next automatic write.
+      const actionsOnly=await GoalWriteback.load(sheetId,googleToken);
+      if(writeBaseline){
+        const workIds=new Set((body.values||[]).slice(1).map(r=>normalizeDateValue(r[0])).filter(Boolean));
+        const actionIds=new Set(actionsOnly.actionRows.slice(1).map(r=>String(r[0]??'')).filter(Boolean));
+        const deletedWork=Object.keys(writeBaseline.work||{}).filter(id=>!workIds.has(id));
+        const deletedActions=Object.keys(writeBaseline.actions||{}).filter(id=>!actionIds.has(id));
+        if(deletedWork.length||deletedActions.length){
+          autoSyncBlocked=true;
+          throw Error('Google Sheets側で記録の行が削除されています。自動上書きせず停止しました。JSONバックアップ後に内容を確認してください');
+        }
+      }
       protectOriginalLocalData();
       if(writeBaseline&&GoalWriteback.countPending(data,writeBaseline)>0)throw Error('同期中に端末の編集がありました。読み込みを延期します');
       mergeSheetRows(body.values||[],'Google Sheets');
@@ -652,7 +668,6 @@
       if(lRes.ok){const lBody=await lRes.json();mergeLessonRows(lBody.values||[],'Google Sheets');}
       else syncStatusMessage('朝のワークは同期済み。講義の学びの取り込みは未完了です（'+lRes.status+'）');
       await fetchGoalSheets(sheetId);
-      const actionsOnly=await GoalWriteback.load(sheetId,googleToken);
       reconcileActionOverlays(actionsOnly.actionRows);
       writeBaseline=GoalWriteback.baselineFromRows(body.values||[],actionsOnly.actionRows);
       saveWriteBaseline();
