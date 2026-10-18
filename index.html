@@ -16,6 +16,11 @@
     button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #8de2c7;outline-offset:2px}
     .shell{max-width:1440px;margin:auto;display:grid;grid-template-columns:253px minmax(0,1fr);min-height:100vh}.sidebar{background:#fff;border-right:1px solid var(--line);padding:32px 17px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}.brand{display:flex;align-items:center;gap:11px;padding:0 13px 30px}.brand-mark{display:grid;place-items:center;width:43px;height:43px;background:var(--deep);color:#c0ebdb;border-radius:15px;font-size:23px}.brand-name{font-size:17px;font-weight:850;letter-spacing:.015em;line-height:1.2}.brand-sub{color:#85949e;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
     .nav{display:flex;flex-direction:column;gap:7px}.nav-btn{border:0;background:transparent;display:flex;align-items:center;gap:13px;width:100%;border-radius:13px;padding:13px 15px;text-align:left;color:#5e7079;font-weight:730;font-size:14px;transition:.15s}.nav-btn:hover{background:#f1f5f3}.nav-btn.active{color:#176044;background:#e8f5ee}.nav-icon{font-size:19px;line-height:1;min-width:24px;text-align:center}.side-note{margin-top:auto;background:#f3f7f4;border:1px solid #e4eee7;border-radius:17px;padding:20px 16px}.side-note .smalltitle{font-size:11px;font-weight:900;color:#377158;letter-spacing:.09em}.side-note p{margin:7px 0 0;font-size:13px;line-height:1.8;color:#62776d}
+    .auto-sync-notice{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:11px 15px;margin:0 0 18px;border:1px solid #d9e9e0;border-radius:13px;background:#edf7f0;color:#255b43;font-size:13px;font-weight:700}
+    .auto-sync-notice[hidden]{display:none}
+    .auto-sync-notice.warning{background:#fff8e9;border-color:#efd7a6;color:#75501c}
+    .auto-sync-notice.error{background:#fff0ed;border-color:#e6bbb2;color:#913d35}
+    .auto-sync-notice .button{font-size:12px;padding:7px 12px;white-space:nowrap}
     .content{min-width:0;padding:36px clamp(20px,5vw,75px) 88px}.frame{max-width:1010px;margin:auto}.topline{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:28px}.eyebrow{color:#498c70;font-size:11px;font-weight:850;letter-spacing:.13em}.heading{font-size:clamp(24px,3vw,35px);font-weight:850;letter-spacing:-.035em;line-height:1.3;margin:5px 0 4px}.subtitle{font-size:13px;color:#85929a;margin:0}.date-pill{background:#fff;border:1px solid var(--line);color:#60717b;font-size:12px;font-weight:740;border-radius:50px;padding:9px 14px;white-space:nowrap}.grid{display:grid;grid-template-columns:1.55fr 1fr;gap:19px}.stack{display:flex;flex-direction:column;gap:19px}
     .hero{position:relative;isolation:isolate;background:linear-gradient(125deg,#152b36 0%,#254637 100%);border-radius:25px;color:white;min-height:250px;padding:clamp(23px,3.5vw,35px);overflow:hidden;display:flex;flex-direction:column;justify-content:center}.hero::after{content:"";position:absolute;width:320px;height:320px;border:1px solid rgba(196,245,219,.17);box-shadow:0 0 0 56px rgba(196,245,219,.04),0 0 0 115px rgba(196,245,219,.035);right:-170px;top:-75px;border-radius:50%;z-index:-1}.hero-label{font-size:11px;color:#bfe8d4;font-weight:850;letter-spacing:.16em;margin:0 0 13px}.hero h2{font-size:clamp(23px,3vw,36px);line-height:1.5;letter-spacing:-.04em;margin:0 0 14px;max-width:660px}.hero .hero-body{font-size:13px;color:#d0e5d8;max-width:590px;margin:0}.hero-footer{margin-top:29px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}.button{display:inline-flex;justify-content:center;align-items:center;gap:9px;border:0;border-radius:12px;font-weight:800;font-size:13px;padding:12px 17px;text-decoration:none;transition:transform .13s,filter .13s}.button:hover{transform:translateY(-1px);filter:brightness(.98)}.primary{background:#bbedda;color:#173a2b}.dark{background:#1d5946;color:#fff}.secondary{background:#edf4ef;color:#287159}.outline{background:white;border:1px solid var(--line);color:#405762}.textbtn{background:transparent;color:#5a806c;padding:10px 3px}.lightlink{background:rgba(255,255,255,.11);color:#e5f9ef;border:1px solid rgba(255,255,255,.15)}
     .panel{background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:20px;padding:24px}.panelh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:17px}.panelh h3{font-size:16px;letter-spacing:-.015em;margin:0}.small-link{border:0;background:transparent;color:var(--green);font-size:12px;font-weight:800;padding:6px 3px}.smallmuted{font-size:12px;color:#8a9aa0}.big-step{font-size:18px;font-weight:800;line-height:1.7;margin:10px 0 16px;overflow-wrap:anywhere}.section-label{font-size:10px;color:#52826a;letter-spacing:.14em;font-weight:950;text-transform:uppercase}.minimum{padding:15px;background:#f0f7f3;border-radius:12px;margin:10px 0 17px;font-size:13px;color:#4b6d5c;overflow-wrap:anywhere}.minimum b{display:block;color:#285c45;font-size:11px;margin-bottom:4px}.empty{font-size:13px;color:#86969b;line-height:1.9}.chip{display:inline-flex;gap:5px;align-items:center;background:#ebf5ee;padding:5px 10px;border-radius:50px;color:#287359;font-size:11px;font-weight:800}.chip.gray{background:#f1f3f4;color:#7b898c}.chip.blue{background:#eaf2f9;color:#456b87}.metric-value{font-size:31px;line-height:1.2;font-weight:850;letter-spacing:-.04em}.metric-label{font-size:11px;color:#859198;margin-top:7px}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.metric{padding:17px 10px;border:1px solid var(--line);border-radius:14px;text-align:center}.graph{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;align-items:end;padding:10px 2px 4px;min-height:118px}.bar-col{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0}.bar-area{height:70px;display:flex;flex-direction:column;justify-content:flex-end;width:100%;align-items:center}.bar{background:#e0e8e3;border-radius:7px 7px 5px 5px;width:min(36px,78%);min-height:7px;transition:height .25s}.bar.did{background:linear-gradient(#79d6ae,#2a8966)}.bar.planned{background:#bed8ca}.bar-label{color:#859296;font-size:10px}.bar-col.today .bar-label{color:#267456;font-weight:900}
@@ -82,7 +87,7 @@
     </nav>
     <div class="side-note"><div class="smalltitle">TODAY'S REMINDER</div><p>大切なのは完璧な毎日ではなく、未来の自分が喜ぶ一歩。</p></div>
   </aside>
-  <main class="content"><div class="frame"><div id="app" aria-live="off"><section class="panel" role="status" style="margin-top:16px"><h2 style="font-size:20px;margin:0 0 12px">アプリの画面を読み込めません</h2><p style="font-size:14px;margin:0">ChatGPTのHTMLファイルプレビューでは、アプリに必要なJavaScriptが実行されない場合があります。<strong>GitHub PagesなどのHTTPSサイトに公開して、Safariでアクセスしてください。</strong></p><p class="muted-text">アプリが実行できる環境では、この案内は自動的にホーム画面へ切り替わります。</p></section></div><div class="footer">未来の自分 · あなたの記録はこの端末のブラウザーに保存されます</div></div></main>
+  <main class="content"><div class="frame"><div id="autoSyncNotice" class="auto-sync-notice" role="status" aria-live="polite" hidden></div><div id="app" aria-live="off"><section class="panel" role="status" style="margin-top:16px"><h2 style="font-size:20px;margin:0 0 12px">アプリの画面を読み込めません</h2><p style="font-size:14px;margin:0">ChatGPTのHTMLファイルプレビューでは、アプリに必要なJavaScriptが実行されない場合があります。<strong>GitHub PagesなどのHTTPSサイトに公開して、Safariでアクセスしてください。</strong></p><p class="muted-text">アプリが実行できる環境では、この案内は自動的にホーム画面へ切り替わります。</p></section></div><div class="footer">未来の自分 · あなたの記録はこの端末のブラウザーに保存されます</div></div></main>
 </div>
 <input type="file" id="importFile" accept=".json,application/json" hidden>
 <input type="file" id="csvFile" accept=".csv,text/csv" hidden>
@@ -108,7 +113,7 @@
   const EXPECTED_HEADERS=['日付','ゴール達成にふさわしい理由','ゴール側の自分の当たり前','未来の自分が喜ぶ行動','最も価値のある行動','最低限の完了ライン','行動しなかった未来','最低限を達成','価値のある行動を実行','今日できたこと','以前の自分との差分','明日の一歩','振り返り完了','ゴール','未来の景色','在り方（BE）','ゴールの理由','更新日時'];
   const EVENING_HEADERS=['復習した学びID','復習した学びテーマ','講義の学び：今日の気づき','講義の学び：明日の実践','講義の学び：復習完了','夜の記録更新日時'];
   let syncConfig={sheetId:'',clientId:'',lastSync:'',lastCount:0,lastMethod:''}, googleToken='', syncBusy=false, writeBusy=false, writeBaseline=null;
-  let autoSyncEnabled=false,autoWriteToken=false,autoTokenExpiresAt=0,autoAuthBusy=false,autoSyncBlocked=false,autoSilentRetryAt=0,autoSaveTimer=null,autoSilentSync=false,autoRenderDeferred=false,autoRetryAfter=0;
+  let autoSyncEnabled=false,autoWriteToken=false,autoTokenExpiresAt=0,autoAuthBusy=false,autoSyncBlocked=false,autoSaveTimer=null,autoSilentSync=false,autoRenderDeferred=false,autoRetryAfter=0;
   const GOAL_PERIODS=["1か月","3か月","1年","3年","5年"];
   const GOAL_HEADERS=["ゴールID","テーマ","期間","定性ゴール","定量ゴール（値・条件）","単位","達成期限","未来の景色","在り方（BE）","ゴールの理由","状態","作成日","最終更新日","最終確認日","メモ"];
   const GOAL_HISTORY_HEADERS=["変更日時（JST）","ゴールID","操作","テーマ","期間","定性ゴール","定量ゴール（値・条件）","単位","達成期限","未来の景色","在り方（BE）","ゴールの理由","状態","変更理由","変更前の更新日時","記録元"];
@@ -289,9 +294,45 @@
       client.requestAccessToken();
     }catch(error){writeBusy=false;syncStatusMessage('書き込み認証の開始に失敗：'+error.message);}
   }
-  // Opt-in automatic synchronization. OAuth access tokens are kept in memory only.
-  // A previously authorized browser may reconnect without another consent screen,
-  // but Google/browser policies can still require a user-initiated login.
+  // Opt-in automatic synchronization. Google GIS token requests open a popup and
+  // must be initiated by a click. Background attempts get blocked on iOS/Chrome.
+  // Show a persistent one-tap reconnect notice instead of repeatedly trying
+  // popups on page load, focus or token expiry. Tokens remain memory-only.
+  function updateAutoSyncNotice(){
+    const el=document.getElementById('autoSyncNotice');
+    if(!el)return;
+    if(!autoSyncEnabled){el.hidden=true;return;}
+    if(autoWriteToken&&Date.now()>=autoTokenExpiresAt){
+      autoWriteToken=false;googleToken='';
+    }
+    const needsAuth=!autoWriteToken||!googleToken;
+    const pending=autoPending();
+    let message='',action='',style='';
+    if(autoSyncBlocked){
+      style='error';
+      message='安全のため自動同期を停止中です。端末の記録は保持されています。Google連携で競合・エラーを確認してください。';
+      action=button('Google連携を確認','go-sync','outline');
+    }else if(autoAuthBusy){
+      style='warning';
+      message='Googleとの接続を確認中です。端末内の記録は保持されています。';
+    }else if(needsAuth){
+      style='warning';
+      message='Googleの再接続が必要です。'+(pending?'未送信の変更はこの端末に保存されています。':'端末内の記録は保持されています。')+' ボタンを押すと同期を再開します。';
+      action=button('Googleに再接続','reconnect-auto-sync','outline');
+    }else if(writeBusy){
+      message='Google Sheetsに保存中です。端末の記録は保持されています。';
+    }else if(syncBusy){
+      message='Google Sheetsから最新の記録を確認中です。';
+    }else if(pending){
+      message='端末に保存済み。Google Sheetsへの自動保存を待っています。';
+    }else{
+      const last=syncConfig.lastSync?new Date(syncConfig.lastSync).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'}):'未実施';
+      message='自動同期オン｜前回の同期：'+last+'。';
+    }
+    el.hidden=false;
+    el.className='auto-sync-notice'+(style?' '+style:'');
+    el.innerHTML='<span>'+esc(message)+'</span>'+action;
+  }
   function editingControlFocused(){
     const el=document.activeElement;
     return Boolean(el&&el.matches('input,textarea,select,[contenteditable="true"]'));
@@ -305,7 +346,9 @@
     return writeBaseline?GoalWriteback.countPending(data,writeBaseline):(localEditsWithoutBaseline()?1:0);
   }
   function scheduleAutoSave(){
-    if(!autoSyncEnabled||autoSyncBlocked||!autoPending())return;
+    if(!autoSyncEnabled)return;
+    updateAutoSyncNotice();
+    if(autoSyncBlocked||!autoWriteToken||!googleToken||!autoPending())return;
     clearTimeout(autoSaveTimer);
     autoSaveTimer=setTimeout(()=>{autoSyncTick();},Math.max(1800,autoRetryAfter-Date.now()));
   }
@@ -387,19 +430,19 @@
     }catch(error){
       autoRetryAfter=Date.now()+60000;
       if(/変更が重複|見出しが想定と違|同じID／日付/.test(error.message))autoSyncBlocked=true;
-      if(/API 401|API 403/.test(error.message))autoWriteToken=false;
+      if(/API 401|API 403/.test(error.message)){autoWriteToken=false;googleToken='';}
       syncStatusMessage('自動保存を停止しました：'+error.message+'。記録はこの端末に残っています。');
     }finally{
       writeBusy=false;
+      updateAutoSyncNotice();
       if(!autoSyncBlocked&&autoWriteToken&&autoPending())scheduleAutoSave();
     }
   }
   async function autoSyncTick(){
     if(!autoSyncEnabled||autoSyncBlocked||!autoWriteToken||!googleToken||syncBusy||writeBusy||document.hidden||Date.now()<autoRetryAfter)return;
     if(Date.now()>=autoTokenExpiresAt){
-      autoWriteToken=false;
-      syncStatusMessage('Google認証の期限が切れました。自動再接続を試みます。');
-      tryAutoConnect(false);
+      autoWriteToken=false;googleToken='';
+      syncStatusMessage('Google認証の期限が切れました。画面上部の「Googleに再接続」を押すと自動同期を再開できます。');
       return;
     }
     try{
@@ -416,8 +459,8 @@
     }
   }
   function tryAutoConnect(interactive){
-    if(autoAuthBusy||(!autoSyncEnabled&&!interactive))return;
-    if(!interactive&&Date.now()<autoSilentRetryAt)return;
+    // OAuth popups require a user gesture. Do not start them in a background timer.
+    if(!interactive||autoAuthBusy)return;
     if(!window.google?.accounts?.oauth2){
       syncStatusMessage('Google認証を読み込めません。ネット接続を確認してください');
       return;
@@ -425,7 +468,7 @@
     const clientId=txt(syncConfig.clientId||DEFAULT_OAUTH_CLIENT_ID);
     if(!/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId))return;
     autoAuthBusy=true;
-    if(!interactive)autoSilentRetryAt=Date.now()+600000;
+    updateAutoSyncNotice();
     try{
       const client=google.accounts.oauth2.initTokenClient({
         client_id:clientId,
@@ -433,7 +476,7 @@
         callback:(response)=>{
           autoAuthBusy=false;
           if(!response?.access_token){
-            syncStatusMessage('自動再接続できません。Google連携で「自動同期を再接続」を押してください。');
+            syncStatusMessage('Googleの認証が完了していません。画面上部の「Googleに再接続」を押してください。');
             return;
           }
           googleToken=response.access_token;
@@ -444,6 +487,7 @@
           autoRetryAfter=0;
           try{localStorage.setItem(AUTO_SYNC_KEY,'1');}catch(e){}
           if(tab==='sync')render();
+          updateAutoSyncNotice();
           autoSyncTick();
         },
         error_callback:(error)=>{
@@ -451,7 +495,7 @@
           syncStatusMessage('Googleへの再接続が必要です：'+(error?.type||'認証エラー'));
         }
       });
-      client.requestAccessToken(interactive?{}:{prompt:''});
+      client.requestAccessToken({prompt:''});
     }catch(error){
       autoAuthBusy=false;
       syncStatusMessage('Google認証の開始に失敗：'+error.message);
@@ -465,7 +509,7 @@
   }
   function renderSync(){const connected=Boolean(googleToken);return header('ChatGPTとGoogle Sheetsをつなぐ','朝の宣言も、夜の振り返りも。会話の結果をこのアプリへ取り込もう。')+`<div class="stack">
    <section class="form-panel"><div class="panelh"><h3>① 記録先のGoogleスプレッドシート</h3><span class="chip gray">自分だけの設定</span></div><p class="muted-text">シートは非公開のままで大丈夫。Google SheetsのURLにある <code>/d/</code> と <code>/edit</code> の間のIDだけをここに入力してください。設定はまずブラウザー内に保存し、Google接続時にGoogle Driveのアプリ専用領域へ安全に共有します。GitHubの公開コードには含まれません。</p><div class="field"><label for="sheetId">GoogleスプレッドシートのID</label><input id="sheetId" type="text" maxlength="4000" data-config="sheetId" placeholder="シートのURLにある長い英数字" value="${esc(syncConfig.sheetId)}" autocomplete="off"></div><div class="sync-kv"><div><strong>セルフエフィカシーワーク記録</strong><div class="sync-small">朝の記録・夜の振り返り・講義の学びを同期</div></div>${/^[a-zA-Z0-9_-]{20,}$/.test(syncConfig.sheetId)?`<a class="button outline" href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(syncConfig.sheetId)}/edit" target="_blank" rel="noopener noreferrer">シートを開く ↗</a>`:'<span class="smallmuted">シートIDを入力してください</span>'}</div></section>
-   <section class="form-panel"><div class="panelh"><h3>② Googleから記録を同期</h3><span class="${connected?'chip':'chip gray'}">${connected?'この画面では認証済み':'Google認証が必要'}</span></div><p class="muted-text">Google公式ログインで<strong>スプレッドシートの読み取り専用権限</strong>を取得します。この権限の許可範囲はGoogle Sheets全体ですが、アプリが実際に読み込むのは上記の専用シートのみです。認証トークンはブラウザーに永続保存しません。</p><div class="field"><label for="clientId">Google Cloudで作成したOAuthクライアントID</label><p class="hint">アプリ共通のOAuthクライアントIDが登録済みなら入力不要です。Google Sheets APIとGoogle Drive APIを有効化し、アプリの公開URLを「承認済みの JavaScript 生成元」に登録してください。</p><input id="clientId" type="text" maxlength="4000" data-config="clientId" placeholder="123456789-xxxx.apps.googleusercontent.com" value="${esc(syncConfig.clientId)}" autocomplete="off"></div><div class="foot-actions">${button('Googleに接続して同期 ↻','google-sync','dark')}${button('Google Sheetsに保存して同期 ↑','save-writeback','secondary')}${button(autoSyncEnabled?(autoSyncBlocked||!autoWriteToken?'自動同期を再接続':'自動同期を停止'):'自動同期を有効にする','toggle-auto-sync','secondary')}${autoSyncEnabled&&(autoSyncBlocked||!autoWriteToken)?button('自動同期を停止','disable-auto-sync','outline'):''}}${button('端末のJSONバックアップ','export','outline')}${button('接続設定の説明','setup-guide','outline')}</div><p class="sync-small">ローカルの file:// で開いた場合はGoogle認証が動作しません。GitHub PagesなどのHTTPSサイトに公開してから利用してください。自動同期を有効にすると、入力後に自動保存し、画面表示中は約2分ごと・再表示時に最新データを読み込みます。初回はGoogleの書き込み権限が必要で、認証期限やブラウザーの制限により再接続が必要な場合があります。シートIDは最初に連携した端末からGoogle Driveのアプリ専用領域に保存され、同じGoogleアカウントで別端末からログインすると自動取得します。Google Drive APIの有効化が必要です。</p></section>
+   <section class="form-panel"><div class="panelh"><h3>② Googleから記録を同期</h3><span class="${connected?'chip':'chip gray'}">${connected?'この画面では認証済み':'Google認証が必要'}</span></div><p class="muted-text">Google公式ログインで<strong>スプレッドシートの読み取り専用権限</strong>を取得します。この権限の許可範囲はGoogle Sheets全体ですが、アプリが実際に読み込むのは上記の専用シートのみです。認証トークンはブラウザーに永続保存しません。</p><div class="field"><label for="clientId">Google Cloudで作成したOAuthクライアントID</label><p class="hint">アプリ共通のOAuthクライアントIDが登録済みなら入力不要です。Google Sheets APIとGoogle Drive APIを有効化し、アプリの公開URLを「承認済みの JavaScript 生成元」に登録してください。</p><input id="clientId" type="text" maxlength="4000" data-config="clientId" placeholder="123456789-xxxx.apps.googleusercontent.com" value="${esc(syncConfig.clientId)}" autocomplete="off"></div><div class="foot-actions">${button('Googleに接続して同期 ↻','google-sync','dark')}${button('Google Sheetsに保存して同期 ↑','save-writeback','secondary')}${button(autoSyncEnabled?(autoSyncBlocked||!autoWriteToken?'自動同期を再接続':'自動同期を停止'):'自動同期を有効にする','toggle-auto-sync','secondary')}${autoSyncEnabled&&(autoSyncBlocked||!autoWriteToken)?button('自動同期を停止','disable-auto-sync','outline'):''}}${button('端末のJSONバックアップ','export','outline')}${button('接続設定の説明','setup-guide','outline')}</div><p class="sync-small">ローカルの file:// で開いた場合はGoogle認証が動作しません。GitHub PagesなどのHTTPSサイトに公開してから利用してください。自動同期を有効にすると、入力後に自動保存し、画面表示中は約2分ごと・再表示時に最新データを読み込みます。初回はGoogleの書き込み権限が必要で、認証期限やブラウザーの制限により再接続が必要な場合があります。再接続が必要なときは全画面の上部に案内を表示します。シートIDは最初に連携した端末からGoogle Driveのアプリ専用領域に保存され、同じGoogleアカウントで別端末からログインすると自動取得します。Google Drive APIの有効化が必要です。</p></section>
    <section class="form-panel"><div class="panelh"><h3>③ OAuth設定前の取り込み方法</h3><span class="chip gray">すぐ試せる</span></div><p class="muted-text">シートの「ファイル → ダウンロード → カンマ区切り形式（.csv）」で<strong>「ワーク記録」タブ</strong>を開いた状態で保存し、ここで読み込みます。朝・夜・講義の学び（S～X列）をまとめて取り込めます。Googleアカウント認証の設定なしでも動作します。</p><div class="foot-actions">${button('CSVファイルを取り込む ↑','sync-csv','secondary')}</div></section>
    <section class="form-panel"><div class="panelh"><h3>同期の状態</h3></div><div class="sync-status" id="syncStatus">${syncConfig.lastSync?`前回：${esc(new Date(syncConfig.lastSync).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}))}（${esc(syncConfig.lastMethod)}、取り込み ${Number(syncConfig.lastCount)} 日分）`:'まだ同期していません。朝または夜の記録をChatGPTで保存してから、同期を実行してください。'}</div><p class="sync-small">Googleに接続して同期：シートから読み込み。Google Sheetsに保存して同期：手動書き戻し（確認画面あり）。自動同期を有効にした端末では、編集後の自動保存と定期的な読み込みを行います。競合時は勝手に上書きせず中止します。アプリ内だけの追加項目・週次レビューはまだ書き戻せません。大切な記録はJSONバックアップも取ってください。</p></section>
    <section class="form-panel"><div class="panelh"><h3>④ 講義の学びも同期する</h3><span class="chip">${data.lessons.length}件登録済み</span></div><p class="muted-text">同じスプレッドシートの「講義の学び」タブも、Google同期時に読み込みます。<b>初期の14件はアプリにも収録済み</b>なので認証前から復習できます。</p><div class="foot-actions">${button('学びのCSVを取り込む ↑','sync-lessons-csv','secondary')}</div><p class="sync-small">「講義の学び」タブを開いてCSVをダウンロードしてください。新しい学びはChatGPT経由でそのタブに追加できます。アプリで直接入力した復習回答は、自動同期を有効にすると自動保存されます（無効の場合は手動書き戻し）。ChatGPTで話して保存した復習結果は、「ワーク記録」タブのS～X列から取り込みます。</p></section>
@@ -606,7 +650,7 @@
   }
 
   function parseCsv(text){const rows=[];let row=[],value='',quotes=false;const src=String(text||'').replace(/^\uFEFF/,'');for(let i=0;i<src.length;i++){let c=src[i];if(quotes){if(c==='"'){if(src[i+1]==='"'){value+='"';i++;}else quotes=false;}else value+=c;}else if(c==='"')quotes=true;else if(c===','){row.push(value);value='';}else if(c==='\n'||c==='\r'){if(c==='\r'&&src[i+1]==='\n')i++;row.push(value);if(row.some(v=>v!==''))rows.push(row);row=[];value='';}else value+=c;}if(quotes)throw Error('CSVの引用符の形式が正しくありません');if(value!==''||row.length){row.push(value);rows.push(row)}return rows;}
-  function syncStatusMessage(msg){const el=document.getElementById('syncStatus');if(el)el.textContent=msg;}
+  function syncStatusMessage(msg){const el=document.getElementById('syncStatus');if(el)el.textContent=msg;updateAutoSyncNotice();}
   async function syncPrivateSheetSettings(){
     // Store only the private spreadsheet ID in the authenticated user's Drive appDataFolder.
     // The appData scope does not grant access to ordinary Drive documents.
@@ -695,21 +739,21 @@
   }
   function progressCtx(){return {data:data,save:()=>{const ok=save();if(ok)scheduleAutoSave();return ok;},render:render,go:go,toast:showToast,toMorning:copyProgressToMorning};}
   function copyProgressToMorning(title,minimum,actionId,goalId){const e=entry(jstToday());if((txt(e.valuableAction)&&e.valuableAction!==title)||(txt(e.minimumAction)&&e.minimumAction!==minimum)){if(!confirm('今日の行動計画を上書きします。よろしいですか？'))return;}e.valuableAction=title;e.minimumAction=minimum||title;e.linkedActionId=actionId||'';const g=(data.goals||[]).find(x=>x.id===goalId);if(g)e.goalSnapshot=goalHeadline(g);if(!save()){showToast('端末への保存に失敗しました');return;}go('morning');showToast('今日のワークにセットしたよ');}
-  function render(){if(autoSilentSync&&editingControlFocused()){autoRenderDeferred=true;return;}const app=document.getElementById('app');let content={home:renderHome,morning:renderMorning,evening:renderEvening,history:renderHistory,goal:renderGoal,progress:()=>GoalProgress.render(progressCtx()),sync:renderSync}[tab]();app.innerHTML=content;document.querySelectorAll('[data-nav]').forEach(b=>{let yes=b.dataset.nav===tab;b.classList.toggle('active',yes);b.setAttribute('aria-current',yes?'page':'false')});document.title=names[tab]+'｜未来の自分';}
+  function render(){if(autoSilentSync&&editingControlFocused()){autoRenderDeferred=true;return;}const app=document.getElementById('app');let content={home:renderHome,morning:renderMorning,evening:renderEvening,history:renderHistory,goal:renderGoal,progress:()=>GoalProgress.render(progressCtx()),sync:renderSync}[tab]();app.innerHTML=content;document.querySelectorAll('[data-nav]').forEach(b=>{let yes=b.dataset.nav===tab;b.classList.toggle('active',yes);b.setAttribute('aria-current',yes?'page':'false')});document.title=names[tab]+'｜未来の自分';updateAutoSyncNotice();}
   function go(to,date=null){if(date)activeDate=date;else if(to==='home'||to==='morning'||to==='evening')activeDate=jstToday();tab=to;render();scrollTo({top:0,behavior:'instant'});}
   function showToast(message){if(autoSilentSync&&/同期しました|取り込みました/.test(message))return;const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2800)}
   function exportData(){const json=JSON.stringify({...data,exportedAt:new Date().toISOString()},null,2);const blob=new Blob([json],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`mirai-goal-backup-${jstToday()}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast('バックアップをダウンロードしました。')}
   document.addEventListener('input',ev=>{const target=ev.target;if(target.matches('[data-entry]')){let field=target.dataset.entry;if(!fieldNames.includes(field))return;entry()[field]=target.value;save();scheduleAutoSave();}else if(target.matches('[data-config]')){let k=target.dataset.config;if(k!=='clientId'&&k!=='sheetId')return;syncConfig[k]=target.value;googleToken='';autoWriteToken=false;autoSyncEnabled=false;clearTimeout(autoSaveTimer);try{localStorage.setItem(AUTO_SYNC_KEY,'0');}catch(e){}saveSyncConfig();if(k==='sheetId')writeBaseline=loadWriteBaseline();}else if(target.matches('[data-goal]')){let field=target.dataset.goal;if(!Object.prototype.hasOwnProperty.call(data.goal,field))return;data.goal[field]=target.value;save();}});
   document.addEventListener('change',ev=>{if(GoalProgress.change(progressCtx(),ev))return;const t=ev.target;if(t.matches('[data-goal-theme-filter]')){goalThemeFilter=t.value;render();return;}if(t.matches('[data-check]')){let f=t.dataset.check;if(f!=='minimumDone'&&f!=='valuableDone')return;entry()[f]=t.checked;save();scheduleAutoSave();showToast(t.checked?'一歩を記録しました！':'チェックを更新しました。');}else if(t.id==='csvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){syncStatusMessage('CSVファイルが大きすぎます（3MB以下）');return;}const reader=new FileReader();reader.onload=()=>{try{mergeSheetRows(parseCsv(String(reader.result)),'CSV');}catch(e){syncStatusMessage('CSV読み込み失敗：'+e.message);showToast('CSV読み込み失敗：'+e.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='actionSyncCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ファイルが大きすぎます');return;}const sheet=pendingActionCsv;const reader=new FileReader();reader.onload=()=>{try{const n=GoalProgress.importSheet(sheet,parseCsv(String(reader.result)),data,save);render();showToast(sheet+'を'+n+'件取り込んだよ');}catch(err){showToast('CSVの読み込みに失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='goalIdeasCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ゴールの種CSVが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeGoalIdeaRows(parseCsv(String(reader.result)));render();showToast('ゴールの種を読み込みました');}catch(err){showToast('ゴールの種の読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='lessonCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('CSVファイルが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeLessonRows(parseCsv(String(reader.result)),'CSV');}catch(err){showToast('学びの読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='importFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>2_000_000){showToast('ファイルが大きすぎます（2MB以下）。');return;}const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||parsed.version!==1||typeof parsed.entries!=='object'||typeof parsed.goal!=='object')throw Error('形式');if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;data=normalize(parsed);save();go('home');showToast('バックアップを読み込みました。')}catch(err){showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。')}};reader.readAsText(file);}});
-  document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev)){scheduleAutoSave();return;}const ideaButton=ev.target.closest('[data-action="copy-goal-question"]');if(ideaButton){const idea=(data.goalIdeas||[]).find(i=>i.id===ideaButton.dataset.ideaId);if(!idea)return;const prompt=goalIdeaPrompt(idea);if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>showToast('深掘り用の文章をコピーしました。ChatGPTの会話に貼り付けてね。')).catch(()=>showToast('コピーできませんでした。質問を会話で伝えてね。'));}else showToast('質問をChatGPTの会話で伝えてね。');return;}const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();scheduleAutoSave();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'save-writeback':saveLocalChangesToSheets();break;case'toggle-auto-sync':if(autoSyncEnabled&&autoWriteToken&&!autoSyncBlocked)disableAutoSync();else tryAutoConnect(true);break;case'disable-auto-sync':disableAutoSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'sync-goal-ideas-csv':document.getElementById('goalIdeasCsvFile').click();break;case'sync-action-csv':pendingActionCsv=el.dataset.sheet||'アクション一覧';document.getElementById('actionSyncCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[e.lessonId]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true};save();scheduleAutoSave();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}save();scheduleAutoSave();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}e.reviewed=true;save();scheduleAutoSave();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
+  document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev)){scheduleAutoSave();return;}const ideaButton=ev.target.closest('[data-action="copy-goal-question"]');if(ideaButton){const idea=(data.goalIdeas||[]).find(i=>i.id===ideaButton.dataset.ideaId);if(!idea)return;const prompt=goalIdeaPrompt(idea);if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>showToast('深掘り用の文章をコピーしました。ChatGPTの会話に貼り付けてね。')).catch(()=>showToast('コピーできませんでした。質問を会話で伝えてね。'));}else showToast('質問をChatGPTの会話で伝えてね。');return;}const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();scheduleAutoSave();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'reconnect-auto-sync':tryAutoConnect(true);break;case'save-writeback':saveLocalChangesToSheets();break;case'toggle-auto-sync':if(autoSyncEnabled&&autoWriteToken&&!autoSyncBlocked)disableAutoSync();else tryAutoConnect(true);break;case'disable-auto-sync':disableAutoSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'sync-goal-ideas-csv':document.getElementById('goalIdeasCsvFile').click();break;case'sync-action-csv':pendingActionCsv=el.dataset.sheet||'アクション一覧';document.getElementById('actionSyncCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[e.lessonId]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true};save();scheduleAutoSave();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}save();scheduleAutoSave();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}e.reviewed=true;save();scheduleAutoSave();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
   data=load();syncConfig=loadSyncConfig();writeBaseline=loadWriteBaseline();
   try{autoSyncEnabled=localStorage.getItem(AUTO_SYNC_KEY)==='1';}catch(e){}
   render();
-  window.addEventListener('load',()=>{if(autoSyncEnabled)tryAutoConnect(false);});
-  window.addEventListener('focus',()=>{if(autoSyncEnabled){if(autoWriteToken)autoSyncTick();else tryAutoConnect(false);}});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&autoSyncEnabled){if(autoWriteToken)autoSyncTick();else tryAutoConnect(false);}});
+  window.addEventListener('load',()=>{if(autoSyncEnabled)updateAutoSyncNotice();});
+  window.addEventListener('focus',()=>{if(autoSyncEnabled){if(autoWriteToken)autoSyncTick();else updateAutoSyncNotice();}});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&autoSyncEnabled){if(autoWriteToken)autoSyncTick();else updateAutoSyncNotice();}});
   document.addEventListener('focusout',()=>{if(autoRenderDeferred)setTimeout(()=>{if(!editingControlFocused()){autoRenderDeferred=false;render();}},200);});
-  setInterval(()=>{if(autoSyncEnabled){if(autoWriteToken)autoSyncTick();else tryAutoConnect(false);}},120000);
+  setInterval(()=>{if(autoSyncEnabled){if(autoWriteToken)autoSyncTick();else updateAutoSyncNotice();}},120000);
 })();
 </script>
 </body>
