@@ -63,10 +63,11 @@ window.GoalWriteback=(function(){
     return {output,conflicts};
   }
   function countPending(data,base){
-    const work=differences(data.entries,base?.work||{}, {},'work').output.length;
-    // New action changes already in the sheetActions cache are not considered app-local changes.
-    const actions=Object.fromEntries((data.progress?.actions||[]).map(x=>[x.id,x]));
-    const changed=differences(actions,base?.actions||{}, {},'action').output.length;
+    if(!base)return 0;
+    const current=(v)=>Object.fromEntries(Object.entries(v||{}).map(([id,row])=>[id,{index:1,values:row}]));
+    const work=differences(data.entries,base.work||{},current(base.work),'work').output.length;
+    const actions=Object.fromEntries((data.progress?.actions||[]).filter(x=>x.id).map(x=>[x.id,x]));
+    const changed=differences(actions,base.actions||{},current(base.actions),'action').output.length;
     return work+changed;
   }
   async function request(url,token,options={}){
