@@ -875,16 +875,37 @@
         showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。');
         return;
       }
+      if(syncBusy||writeBusy||autoAuthBusy){
+        showToast('Google同期中はバックアップを復元できません。同期が終わってからもう一度お試しください。');
+        return;
+      }
       if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;
+      if(syncBusy||writeBusy||autoAuthBusy){
+        showToast('Google同期中はバックアップを復元できません。同期が終わってからもう一度お試しください。');
+        return;
+      }
+      const autoSyncPaused=autoSyncEnabled;
+      if(autoSyncPaused){
+        try{localStorage.setItem(AUTO_SYNC_KEY,'0');}
+        catch(err){
+          showToast('自動同期を安全に停止できないため、バックアップは復元しませんでした。');
+          return;
+        }
+        autoSyncEnabled=false;
+        autoWriteToken=false;
+        googleToken='';
+      }
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer=null;
       const previousData=data;
       data=restoredData;
       if(!save()){
         data=previousData;
-        showToast('バックアップを保存できませんでした。現在の記録は変更されていません。ブラウザーの空き容量を確認してください。');
+        showToast('バックアップを保存できませんでした。現在の記録は変更されていません。ブラウザーの空き容量を確認してください。'+(autoSyncPaused?' 自動同期は安全のため停止しました。':''));
         return;
       }
       go('home');
-      showToast('バックアップを読み込みました。');
+      showToast(autoSyncPaused?'バックアップを読み込みました。安全のため自動同期を停止しました。Google連携で内容を確認してから必要に応じて再開してください。':'バックアップを読み込みました。');
     };
     reader.onerror=()=>showToast('バックアップファイルを読み込めませんでした。');
     reader.readAsText(file);
