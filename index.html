@@ -115,7 +115,7 @@
   const LESSON_HEADERS=['ID','講義','テーマ','学びの要点','今日の問い','今日の実践例','出典','出典URL'];
   const EXPECTED_HEADERS=['日付','ゴール達成にふさわしい理由','ゴール側の自分の当たり前','未来の自分が喜ぶ行動','最も価値のある行動','最低限の完了ライン','行動しなかった未来','最低限を達成','価値のある行動を実行','今日できたこと','以前の自分との差分','明日の一歩','振り返り完了','ゴール','未来の景色','在り方（BE）','ゴールの理由','更新日時'];
   const EVENING_HEADERS=['復習した学びID','復習した学びテーマ','講義の学び：今日の気づき','講義の学び：明日の実践','講義の学び：復習完了','夜の記録更新日時'];
-  let syncConfig={sheetId:'',clientId:'',lastSync:'',lastCount:0,lastMethod:''}, googleToken='', syncBusy=false, syncAuthBusy=false, writeBusy=false, writeBaseline=null;
+  let syncConfig={sheetId:'',clientId:'',lastSync:'',lastCount:0,lastMethod:''}, googleToken='', syncBusy=false, syncAuthBusy=false, writeBusy=false, autoSyncTickBusy=false, writeBaseline=null;
   let backupRestoreSyncGuard=false;
   let autoSyncEnabled=false,autoWriteToken=false,autoTokenExpiresAt=0,autoAuthBusy=false,autoSyncBlocked=false,autoSaveTimer=null,autoSilentSync=false,autoRenderDeferred=false,autoRetryAfter=0;
   let cloudWorkerUrl='',cloudSession='';
@@ -468,17 +468,18 @@
     }
   }
   async function autoSyncTick(){
-    if(!autoSyncEnabled||backupRestoreSyncGuard||autoSyncBlocked||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||document.hidden||Date.now()<autoRetryAfter)return;
-    if((!autoWriteToken||!googleToken||Date.now()>=autoTokenExpiresAt)&&cloudWorkerUrl&&cloudSession){
-      restoreCloudSession();return;
-    }
-    if(!autoWriteToken||!googleToken)return;
-    if(Date.now()>=autoTokenExpiresAt){
-      autoWriteToken=false;googleToken='';
-      syncStatusMessage('Google認証の期限が切れました。再接続すると同期を再開できます。');
-      return;
-    }
+    if(!autoSyncEnabled||backupRestoreSyncGuard||autoSyncBlocked||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy||document.hidden||Date.now()<autoRetryAfter)return;
+    autoSyncTickBusy=true;
     try{
+      if((!autoWriteToken||!googleToken||Date.now()>=autoTokenExpiresAt)&&cloudWorkerUrl&&cloudSession){
+        restoreCloudSession();return;
+      }
+      if(!autoWriteToken||!googleToken)return;
+      if(Date.now()>=autoTokenExpiresAt){
+        autoWriteToken=false;googleToken='';
+        syncStatusMessage('Google認証の期限が切れました。再接続すると同期を再開できます。');
+        return;
+      }
       if(!/^[A-Za-z0-9_-]{20,}$/.test(txt(syncConfig.sheetId))){
         await syncPrivateSheetSettings();
       }
@@ -489,6 +490,8 @@
       }
     }catch(error){
       syncStatusMessage('自動同期を保留：'+error.message);
+    }finally{
+      autoSyncTickBusy=false;
     }
   }
 
@@ -921,12 +924,12 @@
         showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。');
         return;
       }
-      if(syncBusy||syncAuthBusy||writeBusy||autoAuthBusy){
+      if(syncBusy||syncAuthBusy||writeBusy||autoAuthBusy||autoSyncTickBusy){
         showToast('Google同期中はバックアップを復元できません。同期が終わってからもう一度お試しください。');
         return;
       }
       if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;
-      if(syncBusy||syncAuthBusy||writeBusy||autoAuthBusy){
+      if(syncBusy||syncAuthBusy||writeBusy||autoAuthBusy||autoSyncTickBusy){
         showToast('Google同期中はバックアップを復元できません。同期が終わってからもう一度お試しください。');
         return;
       }
