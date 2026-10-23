@@ -104,6 +104,7 @@
   const WRITE_BASELINE_KEY='mirai-goal-sheet-write-baseline-v1:';
   const PRE_SYNC_BACKUP_KEY='mirai-goal-pre-writeback-backup-v1:';
   const AUTO_SYNC_KEY='mirai-goal-auto-sync-enabled-v1';
+  const BACKUP_RESTORE_SYNC_GUARD_KEY='mirai-goal-backup-restore-sync-guard-v1';
   const CLOUD_WORKER_KEY='mirai-goal-cloud-auth-worker-v1';
   const CLOUD_SESSION_KEY='mirai-goal-cloud-auth-session-v1';
   // OAuth client IDs are public identifiers (not client secrets).
@@ -114,7 +115,8 @@
   const LESSON_HEADERS=['ID','講義','テーマ','学びの要点','今日の問い','今日の実践例','出典','出典URL'];
   const EXPECTED_HEADERS=['日付','ゴール達成にふさわしい理由','ゴール側の自分の当たり前','未来の自分が喜ぶ行動','最も価値のある行動','最低限の完了ライン','行動しなかった未来','最低限を達成','価値のある行動を実行','今日できたこと','以前の自分との差分','明日の一歩','振り返り完了','ゴール','未来の景色','在り方（BE）','ゴールの理由','更新日時'];
   const EVENING_HEADERS=['復習した学びID','復習した学びテーマ','講義の学び：今日の気づき','講義の学び：明日の実践','講義の学び：復習完了','夜の記録更新日時'];
-  let syncConfig={sheetId:'',clientId:'',lastSync:'',lastCount:0,lastMethod:''}, googleToken='', syncBusy=false, writeBusy=false, writeBaseline=null;
+  let syncConfig={sheetId:'',clientId:'',lastSync:'',lastCount:0,lastMethod:''}, googleToken='', syncBusy=false, syncAuthBusy=false, writeBusy=false, autoSyncTickBusy=false, writeBaseline=null;
+  let backupRestoreSyncGuard=false;
   let autoSyncEnabled=false,autoWriteToken=false,autoTokenExpiresAt=0,autoAuthBusy=false,autoSyncBlocked=false,autoSaveTimer=null,autoSilentSync=false,autoRenderDeferred=false,autoRetryAfter=0;
   let cloudWorkerUrl='',cloudSession='';
   const GOAL_PERIODS=["1か月","3か月","1年","3年","5年"];
@@ -263,12 +265,18 @@
       Object.entries(GoalWriteback.actionFields).forEach(([index,key])=>{a[key]=String(r[Number(index)]??'');});
     });
   }
-  async function saveLocalChangesToSheets(){
-    if(syncBusy||writeBusy)return;
+  async function saveLocalChangesToSheets(confirmed=false){
+    if(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy)return;
     if(!/^[A-Za-z0-9_-]{20,}$/.test(txt(syncConfig.sheetId))){syncStatusMessage('先に通常のGoogle同期で保存先を設定してください');return;}
-    if(!confirm('この端末で編集した朝・夜のワークとアクションをGoogle Sheetsに保存します。ほかの端末の変更と競合する場合は保存しません。実行しますか？'))return;
+    if(!confirmed&&!confirm('この端末で編集した朝・夜のワークとアクションをGoogle Sheetsに保存します。ほかの端末の変更と競合する場合は保存しません。実行しますか？'))return;
     if(cloudWorkerUrl&&cloudSession){
-      if(!googleToken){syncStatusMessage('自動接続を復旧しています。少し待ってから保存してください');autoSyncEnabled=true;try{localStorage.setItem(AUTO_SYNC_KEY,'1');}catch(e){}restoreCloudSession();return;}
+      if(!googleToken){
+        if(backupRestoreSyncGuard){
+          connectCloudSessionForManualUse(()=>saveLocalChangesToSheets(true));
+          return;
+        }
+        syncStatusMessage('自動接続を復旧しています。少し待ってから保存してください');autoSyncEnabled=true;try{localStorage.setItem(AUTO_SYNC_KEY,'1');}catch(e){}restoreCloudSession();return;
+      }
       writeBusy=true;
       try{
         syncStatusMessage('Google Sheetsの最新データと変更の競合を確認中…');
@@ -429,7 +437,7 @@
     if(!editingControlFocused())render();
   }
   async function autoCommit(){
-    if(writeBusy||syncBusy||!autoWriteToken||!googleToken)return;
+    if(writeBusy||syncBusy||syncAuthBusy||autoAuthBusy||!autoWriteToken||!googleToken)return;
     writeBusy=true;
     try{
       syncStatusMessage('変更をGoogle Sheetsへ自動保存しています…');
@@ -460,17 +468,18 @@
     }
   }
   async function autoSyncTick(){
-    if(!autoSyncEnabled||autoSyncBlocked||syncBusy||writeBusy||document.hidden||Date.now()<autoRetryAfter)return;
-    if((!autoWriteToken||!googleToken||Date.now()>=autoTokenExpiresAt)&&cloudWorkerUrl&&cloudSession){
-      restoreCloudSession();return;
-    }
-    if(!autoWriteToken||!googleToken)return;
-    if(Date.now()>=autoTokenExpiresAt){
-      autoWriteToken=false;googleToken='';
-      syncStatusMessage('Google認証の期限が切れました。再接続すると同期を再開できます。');
-      return;
-    }
+    if(!autoSyncEnabled||backupRestoreSyncGuard||autoSyncBlocked||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy||document.hidden||Date.now()<autoRetryAfter)return;
+    autoSyncTickBusy=true;
     try{
+      if((!autoWriteToken||!googleToken||Date.now()>=autoTokenExpiresAt)&&cloudWorkerUrl&&cloudSession){
+        restoreCloudSession();return;
+      }
+      if(!autoWriteToken||!googleToken)return;
+      if(Date.now()>=autoTokenExpiresAt){
+        autoWriteToken=false;googleToken='';
+        syncStatusMessage('Google認証の期限が切れました。再接続すると同期を再開できます。');
+        return;
+      }
       if(!/^[A-Za-z0-9_-]{20,}$/.test(txt(syncConfig.sheetId))){
         await syncPrivateSheetSettings();
       }
@@ -481,6 +490,8 @@
       }
     }catch(error){
       syncStatusMessage('自動同期を保留：'+error.message);
+    }finally{
+      autoSyncTickBusy=false;
     }
   }
 
@@ -494,11 +505,34 @@
   }
   function startCloudAuth(){
     if(!cloudWorkerUrl){go('sync');syncStatusMessage('先にCloudflare WorkerのHTTPS URLを設定してください');return;}
-    if(!confirm('初回のみGoogleにログインします。認証後はこのアプリへ戻り、自動同期を開始します。続けますか？'))return;
+    const message=backupRestoreSyncGuard
+      ?'Googleにログインしてシートの内容を確認します。バックアップ復元後の自動同期は停止したままです。続けますか？'
+      :'初回のみGoogleにログインします。認証後はこのアプリへ戻り、自動同期を開始します。続けますか？';
+    if(!confirm(message))return;
     location.assign(cloudWorkerUrl+'/auth/start');
   }
+  async function connectCloudSessionForManualUse(onConnected){
+    if(!cloudWorkerUrl||!cloudSession||syncAuthBusy||syncBusy||writeBusy)return;
+    syncAuthBusy=true;
+    try{
+      const res=await fetch(cloudWorkerUrl+'/auth/token',{
+        headers:{Authorization:'Bearer '+cloudSession},cache:'no-store'
+      });
+      if(!res.ok)throw Error('Googleの認証情報を取得できません（'+res.status+'）');
+      const body=await res.json();
+      if(!body.access_token)throw Error('Googleの認証情報を取得できませんでした');
+      googleToken=body.access_token;
+    }catch(error){
+      googleToken='';
+      syncStatusMessage('Googleへの接続を確認できません：'+error.message);
+      return;
+    }finally{
+      syncAuthBusy=false;
+    }
+    if(googleToken)onConnected();
+  }
   async function restoreCloudSession(){
-    if(!autoSyncEnabled||!cloudWorkerUrl||!cloudSession||autoAuthBusy||document.hidden)return;
+    if(!autoSyncEnabled||backupRestoreSyncGuard||!cloudWorkerUrl||!cloudSession||autoAuthBusy||document.hidden)return;
     autoAuthBusy=true;
     updateAutoSyncNotice();
     try{
@@ -553,10 +587,17 @@
       if(!/^[A-Za-z0-9_-]{43}$/.test(body.session||''))throw Error('ログイン結果の形式が不正です');
       cloudSession=body.session;
       localStorage.setItem(CLOUD_SESSION_KEY,cloudSession);
-      autoSyncEnabled=true;
-      localStorage.setItem(AUTO_SYNC_KEY,'1');
+      if(backupRestoreSyncGuard){
+        autoSyncEnabled=false;
+        autoWriteToken=false;
+        googleToken='';
+        localStorage.setItem(AUTO_SYNC_KEY,'0');
+      }else{
+        autoSyncEnabled=true;
+        localStorage.setItem(AUTO_SYNC_KEY,'1');
+      }
       autoRetryAfter=0;
-      showToast('Googleに接続しました。次回からは自動接続します');
+      showToast(backupRestoreSyncGuard?'Googleに接続しました。自動同期は停止したままです。':'Googleに接続しました。次回からは自動接続します');
     }catch(error){
       showToast('Googleログイン失敗：'+error.message);
     }finally{
@@ -564,9 +605,15 @@
       updateAutoSyncNotice();
     }
     if(cloudSession&&autoSyncEnabled)restoreCloudSession();
+    else if(cloudSession&&backupRestoreSyncGuard)connectCloudSessionForManualUse(()=>fetchSheetRows());
     return true;
   }
   function tryAutoConnect(interactive){
+    if(backupRestoreSyncGuard){
+      try{localStorage.removeItem(BACKUP_RESTORE_SYNC_GUARD_KEY);}
+      catch(error){showToast('自動同期を有効にできません。端末の保存領域を確認してください。');return;}
+      backupRestoreSyncGuard=false;
+    }
     if(cloudWorkerUrl){
       if(cloudSession){autoSyncEnabled=true;try{localStorage.setItem(AUTO_SYNC_KEY,'1');}catch(e){}autoRetryAfter=0;restoreCloudSession();}
       else if(interactive)startCloudAuth();
@@ -789,7 +836,7 @@
     if(!created.ok)throw Error('Google Driveに同期設定を保存できませんでした（'+created.status+'）');
   }
   async function fetchSheetRows(){
-    if(syncBusy||writeBusy)return;
+    if(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy)return;
     if(writeBaseline && GoalWriteback.countPending(data,writeBaseline)>0){syncStatusMessage('この端末に未送信の変更があります。先に「Google Sheetsに保存して同期」で保存してください。Google側の記録で上書きしないため、読み込みを停止しました');return;}
     syncBusy=true;syncStatusMessage('非公開のGoogleシートと端末共有設定を確認中…');
     let cloudWarning='';
@@ -834,9 +881,10 @@
     finally{syncBusy=false;}
   }
   function startGoogleSync(){
-    if(syncBusy)return;
+    if(syncBusy||syncAuthBusy)return;
     if(cloudWorkerUrl&&cloudSession){
       if(googleToken)fetchSheetRows();
+      else if(backupRestoreSyncGuard)connectCloudSessionForManualUse(()=>fetchSheetRows());
       else{autoSyncEnabled=true;try{localStorage.setItem(AUTO_SYNC_KEY,'1');}catch(e){}autoRetryAfter=0;restoreCloudSession();}
       return;
     }
@@ -847,14 +895,15 @@
     if(!window.google?.accounts?.oauth2){syncStatusMessage('Google認証ライブラリを読み込めません。ネット接続とブロック設定を確認してください');return;}
     if(googleToken){fetchSheetRows();return;}
     try{
+      syncAuthBusy=true;
       const client=google.accounts.oauth2.initTokenClient({
         client_id:id,
         scope:'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.appdata',
-        callback:(response)=>{if(!response?.access_token){syncStatusMessage('Googleアカウントの許可が得られませんでした');return;}googleToken=response.access_token;fetchSheetRows();},
-        error_callback:(error)=>{syncStatusMessage('Google認証を完了できませんでした：'+(error?.type||'unknown'));}
+        callback:(response)=>{syncAuthBusy=false;if(!response?.access_token){syncStatusMessage('Googleアカウントの許可が得られませんでした');return;}googleToken=response.access_token;fetchSheetRows();},
+        error_callback:(error)=>{syncAuthBusy=false;syncStatusMessage('Google認証を完了できませんでした：'+(error?.type||'unknown'));}
       });
       client.requestAccessToken();
-    }catch(error){syncStatusMessage('Google認証を開始できません：'+error.message);}
+    }catch(error){syncAuthBusy=false;syncStatusMessage('Google認証を開始できません：'+error.message);}
   }
   function progressCtx(){return {data:data,save:()=>{const ok=save();if(ok)scheduleAutoSave();return ok;},render:render,go:go,toast:showToast,toMorning:copyProgressToMorning};}
   function copyProgressToMorning(title,minimum,actionId,goalId){const e=entry(jstToday());if((txt(e.valuableAction)&&e.valuableAction!==title)||(txt(e.minimumAction)&&e.minimumAction!==minimum)){if(!confirm('今日の行動計画を上書きします。よろしいですか？'))return;}e.valuableAction=title;e.minimumAction=minimum||title;e.linkedActionId=actionId||'';const g=(data.goals||[]).find(x=>x.id===goalId);if(g)e.goalSnapshot=goalHeadline(g);if(!save()){showToast('端末への保存に失敗しました');return;}go('morning');showToast('今日のワークにセットしたよ');}
@@ -875,16 +924,39 @@
         showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。');
         return;
       }
+      if(syncBusy||syncAuthBusy||writeBusy||autoAuthBusy||autoSyncTickBusy){
+        showToast('Google同期中はバックアップを復元できません。同期が終わってからもう一度お試しください。');
+        return;
+      }
       if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;
+      if(syncBusy||syncAuthBusy||writeBusy||autoAuthBusy||autoSyncTickBusy){
+        showToast('Google同期中はバックアップを復元できません。同期が終わってからもう一度お試しください。');
+        return;
+      }
+      try{
+        localStorage.setItem(BACKUP_RESTORE_SYNC_GUARD_KEY,'1');
+        backupRestoreSyncGuard=true;
+        autoSyncEnabled=false;
+        autoWriteToken=false;
+        googleToken='';
+        localStorage.setItem(AUTO_SYNC_KEY,'0');
+      }catch(err){
+        showToast(backupRestoreSyncGuard
+          ?'自動同期の設定を安全に保存できないため、バックアップは復元しませんでした。自動同期は停止しています。'
+          :'自動同期を安全に停止できないため、バックアップは復元しませんでした。');
+        return;
+      }
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer=null;
       const previousData=data;
       data=restoredData;
       if(!save()){
         data=previousData;
-        showToast('バックアップを保存できませんでした。現在の記録は変更されていません。ブラウザーの空き容量を確認してください。');
+        showToast('バックアップを保存できませんでした。現在の記録は変更されていません。ブラウザーの空き容量を確認してください。自動同期は安全のため停止しました。');
         return;
       }
       go('home');
-      showToast('バックアップを読み込みました。');
+      showToast('バックアップを読み込みました。安全のため自動同期を停止しました。Google連携で内容を確認してから必要に応じて再開してください。');
     };
     reader.onerror=()=>showToast('バックアップファイルを読み込めませんでした。');
     reader.readAsText(file);
@@ -901,7 +973,10 @@
   document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev)){scheduleAutoSave();return;}const ideaButton=ev.target.closest('[data-action="copy-goal-question"]');if(ideaButton){const idea=(data.goalIdeas||[]).find(i=>i.id===ideaButton.dataset.ideaId);if(!idea)return;const prompt=goalIdeaPrompt(idea);if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>showToast('深掘り用の文章をコピーしました。ChatGPTの会話に貼り付けてね。')).catch(()=>showToast('コピーできませんでした。質問を会話で伝えてね。'));}else showToast('質問をChatGPTの会話で伝えてね。');return;}const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();scheduleAutoSave();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'reconnect-auto-sync':tryAutoConnect(true);break;case'save-writeback':saveLocalChangesToSheets();break;case'toggle-auto-sync':if(autoSyncEnabled&&autoWriteToken&&!autoSyncBlocked)disableAutoSync();else tryAutoConnect(true);break;case'disable-auto-sync':disableAutoSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'sync-goal-ideas-csv':document.getElementById('goalIdeasCsvFile').click();break;case'sync-action-csv':pendingActionCsv=el.dataset.sheet||'アクション一覧';document.getElementById('actionSyncCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[e.lessonId]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true};save();scheduleAutoSave();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}save();scheduleAutoSave();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}e.reviewed=true;save();scheduleAutoSave();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
   data=load();syncConfig=loadSyncConfig();writeBaseline=loadWriteBaseline();
   try{cloudWorkerUrl=validCloudWorkerUrl(localStorage.getItem(CLOUD_WORKER_KEY));cloudSession=localStorage.getItem(CLOUD_SESSION_KEY)||'';}catch(e){}
-  try{autoSyncEnabled=localStorage.getItem(AUTO_SYNC_KEY)==='1';}catch(e){}
+  try{
+    backupRestoreSyncGuard=localStorage.getItem(BACKUP_RESTORE_SYNC_GUARD_KEY)==='1';
+    autoSyncEnabled=!backupRestoreSyncGuard&&localStorage.getItem(AUTO_SYNC_KEY)==='1';
+  }catch(e){autoSyncEnabled=false;}
   render();
   window.addEventListener('load',()=>{handleCloudAuthReturn().then(handled=>{if(!handled&&autoSyncEnabled&&cloudWorkerUrl&&cloudSession)restoreCloudSession();else if(autoSyncEnabled)updateAutoSyncNotice();});});
   window.addEventListener('focus',()=>{if(autoSyncEnabled){if(autoWriteToken)autoSyncTick();else if(cloudWorkerUrl&&cloudSession)restoreCloudSession();else updateAutoSyncNotice();}});
