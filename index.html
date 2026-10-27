@@ -782,7 +782,8 @@
   function renderSyncReview(){
     if(!syncReview)return '';
     const changed=syncReview.groups.filter(group=>group.values.length);
-    const equal=syncReview.groups.filter(group=>!group.values.length).length;
+    const counts=GoalWriteback.reviewCounts(syncReview.groups);
+    const canImportFromSheets=syncReview.groups.some(group=>group.values.some(field=>field.status==='Sheetsだけに存在'));
     const content=changed.map(group=>'<article class="sync-review-record"><h4>'+esc(group.kind==='work'?'ワーク記録':'アクション')+' ・ '+esc(group.id)+'</h4>'+
       group.values.map(field=>{
         const key=reviewKey(field),choice=syncReviewChoices[key]||'';
@@ -799,7 +800,8 @@
       }).join('')+'</article>').join('')||'<p class="sync-review-empty">比較対象のワーク記録・アクションに差分はありません。</p>';
     return '<section class="form-panel sync-review-panel"><div class="panelh"><h3>端末とGoogle Sheetsの差分</h3><span class="chip gray">読み取り確認済み</span></div>'+
       '<p class="muted-text">差分確認では、端末の記録・同期基準・Google Sheets・Google Driveの設定は変更していません。項目ごとに残す内容を選んでください。競合と同期基準がない場合は、選択するまで同期しません。</p>'+
-      '<p class="sync-review-count">差分 '+changed.length+'件 ・ 一致 '+equal+'件</p><div class="sync-review-list">'+content+'</div>'+
+      '<p class="sync-review-count">差分のある記録 '+counts.changedRecords+'件 ・ 比較した記録 '+counts.comparedRecords+'件 ・ 差分項目 '+counts.changedFields+'項目 ・ 一致 '+counts.equalRecords+'件</p><div class="sync-review-list">'+content+'</div>'+
+      (canImportFromSheets?'<div class="info"><strong>初回の一括取り込み</strong><br>Google Sheetsにだけある記録をまとめて端末へ追加できます。端末側の記録は上書きせず、Sheetsへの書き込みも行いません。</div><div class="foot-actions">'+button('Google Sheetsの記録をまとめて取り込む','import-sync-review','secondary')+'</div>':'')+
       '<div class="warning"><strong>この画面で同期する範囲</strong><br>朝・夜のワーク記録とアクション一覧の対応項目だけです。ゴール設定と旧ゴールメモ、ゴール変更/確認履歴、ゴールの種、講義一覧、複数講義ごとの復習メモ、アクション候補/履歴、アクションの事実・GAP・今週計画、週次レビュー/履歴、週間計画は対象外です。端末内のデータはそのまま残し、Sheetsから自動取り込みしません。</div>'+
       '<div class="foot-actions">'+button('選んだ内容で同期する','apply-sync-review','dark')+button('差分を閉じる','cancel-sync-review','outline')+'</div></section>';
   }
@@ -818,6 +820,70 @@
     }catch(error){
       syncStatusMessage('差分を確認できませんでした。記録は変更していません：'+error.message);
     }finally{syncBusy=false;}
+  }
+  async function importReviewedSheetsData(){
+    if(!syncReview||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
+    const review=syncReview;
+    if(JSON.stringify(data)!==review.localSnapshot){
+      syncReview=null;syncReviewChoices={};render();
+      syncStatusMessage('差分確認後に端末の記録が変更されました。もう一度差分を確認してください');
+      return;
+    }
+    if(review.sheetId!==txt(syncConfig.sheetId)){
+      syncReview=null;syncReviewChoices={};render();
+      syncStatusMessage('確認中に保存先が変わりました。もう一度差分を確認してください');
+      return;
+    }
+    syncBusy=true;
+    let refreshReview=false;
+    try{
+      syncStatusMessage('取り込み直前にGoogle Sheetsの内容を再確認しています…');
+      const live=await GoalWriteback.load(review.sheetId,googleToken);
+      if(JSON.stringify(live.workRows)!==JSON.stringify(review.rows.workRows)
+        ||JSON.stringify(live.actionRows)!==JSON.stringify(review.rows.actionRows)){
+        syncReview=null;syncReviewChoices={};refreshReview=true;
+        syncStatusMessage('差分確認後にGoogle Sheetsの内容が変わりました。取り込まず、最新の差分を再確認します');
+      }
+      if(!refreshReview){
+        const imported=GoalWriteback.importInitial(data,live.workRows,live.actionRows);
+        if(!imported.summary.recordsImported){
+          syncStatusMessage('新しく追加できる記録はありませんでした。端末の記録は変更していません');
+          return;
+        }
+        autoSyncEnabled=false;autoWriteToken=false;
+        try{
+          localStorage.setItem(AUTO_SYNC_KEY,'0');
+          localStorage.removeItem(AUTO_ENABLE_AFTER_REVIEW_KEY);
+        }catch(error){throw Error('自動同期を安全に停止できません。取り込みを中止しました');}
+        if(!saveSafeSyncApproval(false))throw Error('自動同期の停止状態を保存できません。取り込みを中止しました');
+        enableAutoAfterReview=false;
+        const previousData=data,previousBaseline=writeBaseline;
+        data=imported.data;
+        if(!save()){
+          data=previousData;
+          save();
+          throw Error('取り込んだ記録を端末に保存できませんでした。端末の記録は元に戻しました');
+        }
+        writeBaseline=GoalWriteback.baselineFromRows(live.workRows,live.actionRows);
+        if(!saveWriteBaseline()){
+          writeBaseline=previousBaseline;
+          data=previousData;
+          const rollbackSaved=save();
+          throw Error('同期基準を保存できず、取り込みを取り消しました'+(rollbackSaved?'':'。端末データの復元保存も失敗しました。ページを閉じず、JSONバックアップを確認してください'));
+        }
+        syncReview=null;syncReviewChoices={};
+        const summary=imported.summary;
+        syncStatusMessage('Sheetsから取り込みました：新規 '+summary.recordsAdded+'件、既存記録への追加 '+(summary.workRecordsUpdated+summary.actionRecordsUpdated)+'件（'+summary.fieldsImported+'項目）。端末の既存値 '+summary.localFieldsKept+'項目は保持しました。自動同期は停止中です。内容を確認してから差分を確認してください');
+        render();
+        showToast('Google Sheetsの記録を端末に追加しました');
+      }
+    }catch(error){
+      syncStatusMessage('取り込みを完了できませんでした：'+error.message+'。Google Sheetsには書き込んでいません');
+    }finally{
+      syncBusy=false;
+      updateAutoSyncNotice();
+    }
+    if(refreshReview)await fetchSheetRows();
   }
   async function applyReviewedSync(){
     if(!syncReview||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
@@ -978,6 +1044,7 @@
   },true);
   document.addEventListener('click',ev=>{
     const action=ev.target.closest?.('[data-action]')?.dataset.action;
+    if(action==='import-sync-review'){ev.preventDefault();ev.stopImmediatePropagation();importReviewedSheetsData();return;}
     if(action==='apply-sync-review'){ev.preventDefault();ev.stopImmediatePropagation();applyReviewedSync();return;}
     if(action==='cancel-sync-review'){ev.preventDefault();ev.stopImmediatePropagation();cancelSyncReview();return;}
     if(action==='toggle-auto-sync'){

@@ -19,6 +19,15 @@ window.GoalWriteback=(function(){
     return value===null||value===undefined||(typeof value==='string'&&value.trim()==='');
   }
   function reviewKey(field){return [field.kind,field.id,field.index].join('\u0001');}
+  function reviewCounts(groups){
+    const changed=groups.filter(group=>group.values.length);
+    return {
+      comparedRecords:groups.length,
+      changedRecords:changed.length,
+      equalRecords:groups.length-changed.length,
+      changedFields:changed.reduce((count,group)=>count+group.values.length,0)
+    };
+  }
   function destructiveChanges(fields,choices){
     return fields.flatMap(field=>{
       const selected=choices[reviewKey(field)];
@@ -120,14 +129,14 @@ window.GoalWriteback=(function(){
           const baseValue=old?reviewValue(old[index],isBool):null;
           const remoteValue=server?reviewValue(server[index],isBool):null;
           const localValue=isBool&&rawLocalValue==='FALSE'&&(!old||reviewValue(old[index],true)==='')?'':rawLocalValue;
-          const deletionRisk=Boolean(old&&(!item||!server));
+          const deletionRisk=Boolean(old&&item&&!server);
           const localSet=localValue!==null&&hasValue(localValue,isBool);
           const remoteSet=remoteValue!==null&&hasValue(remoteValue,isBool);
           const baseSet=baseValue!==null&&hasValue(baseValue,isBool);
-          const valueClearRisk=Boolean(old&&baseSet&&(!localSet||!remoteSet));
+          const valueClearRisk=Boolean(old&&item&&server&&baseSet&&(!localSet||!remoteSet));
           const bothEmpty=(localValue===null||localValue==='')&&(remoteValue===null||remoteValue==='');
           if((localValue===remoteValue||bothEmpty)&&!deletionRisk&&!valueClearRisk)continue;
-          const localChanged=old?localValue!==baseValue:localSet;
+          const localChanged=item?(old?localValue!==baseValue:localSet):false;
           const remoteChanged=old?remoteValue!==baseValue:remoteSet;
           let status;
           if(deletionRisk||valueClearRisk)status='削除・空欄化の可能性';
@@ -180,6 +189,116 @@ window.GoalWriteback=(function(){
     let item=data.progress.actions.find(a=>a.id===id);
     if(!item){item={id};data.progress.actions.push(item);}
     item[key]=String(value??'');
+  }
+  function importInitial(data,workRows,actionRows){
+    const staged=JSON.parse(JSON.stringify(data));
+    if(!staged.entries||typeof staged.entries!=='object'||Array.isArray(staged.entries))staged.entries={};
+    if(!staged.progress||typeof staged.progress!=='object')staged.progress={};
+    if(!Array.isArray(staged.progress.actions))staged.progress.actions=[];
+    if(!Array.isArray(staged.progress.sheetActions))staged.progress.sheetActions=[];
+    const summary={workRecordsAdded:0,workRecordsUpdated:0,workFieldsImported:0,
+      actionRecordsAdded:0,actionRecordsUpdated:0,actionFieldsImported:0,
+      localFieldsKept:0,localRecordsKept:0};
+    const localWorkHasData=item=>Object.entries(WF).some(([index,key])=>{
+      if(BOOL.has(Number(index)))return item[key]===true;
+      return String(item[key]??'').trim()!=='';
+    })||String(item.linkedActionId??'').trim()!==''||String(item.goalSnapshot??'').trim()!==''
+      ||Object.values(item.lessonNotes||{}).some(note=>note&&(String(note.reflection??'').trim()!==''
+        ||String(note.nextStep??'').trim()!==''||note.reviewed===true));
+    const nestedLessonValue=(item,key)=>{
+      const note=item.lessonNotes?.[item.lessonId];
+      if(key==='lessonReflection')return note?.reflection;
+      if(key==='lessonNextStep')return note?.nextStep;
+      if(key==='lessonReviewed')return note?.reviewed;
+      return undefined;
+    };
+    const remoteWork=mapRows(workRows,24);
+    for(const [id,row] of Object.entries(remoteWork)){
+      if(!workDate.test(id))continue;
+      const current=staged.entries[id]||null;
+      const meaningfulLocal=Boolean(current&&localWorkHasData(current));
+      const candidate=current?{...current}:{
+        fit:'',normal:'',futureAction:'',valuableAction:'',minimumAction:'',withoutAction:'',
+        minimumDone:false,valuableDone:false,achievement:'',growth:'',tomorrow:'',reviewed:false,
+        lessonId:'',lessonTitle:'',lessonReflection:'',lessonNextStep:'',lessonReviewed:false,
+        lessonNotes:{},linkedActionId:'',goalSnapshot:''
+      };
+      let importedFields=0,keptFields=0;
+      for(const [indexText,key] of Object.entries(WF)){
+        const index=Number(indexText),remoteValue=row.values[index];
+        if(!remoteValue.trim())continue;
+        const boolean=BOOL.has(index);
+        const localValue=candidate[key],nestedValue=nestedLessonValue(candidate,key);
+        const effectiveLocalValue=(nestedValue!==undefined&&nestedValue!==null&&String(nestedValue).trim()!=='')?nestedValue:localValue;
+        const localHasValue=boolean?(meaningfulLocal||effectiveLocalValue===true):String(effectiveLocalValue??'').trim()!=='';
+        if(meaningfulLocal&&localHasValue){
+          const normalizedRemote=boolean?cell(remoteValue,true):remoteValue;
+          const normalizedLocal=boolean?cell(effectiveLocalValue,true):String(effectiveLocalValue??'');
+          if(normalizedLocal!==normalizedRemote)keptFields++;
+          continue;
+        }
+        applyRemoteField({entries:{[id]:candidate}},'work',id,index,boolean?cell(remoteValue,true):remoteValue);
+        importedFields++;
+      }
+      if(importedFields){
+        staged.entries[id]=candidate;
+        summary.workFieldsImported+=importedFields;
+        summary.localFieldsKept+=keptFields;
+        if(!current)summary.workRecordsAdded++;
+        else summary.workRecordsUpdated++;
+      }else if(keptFields){
+        summary.localFieldsKept+=keptFields;
+      }
+      if(current&&meaningfulLocal)summary.localRecordsKept++;
+    }
+
+    const knownActions=new Set([
+      ...staged.progress.actions,...staged.progress.sheetActions
+    ].filter(item=>item&&item.id).map(item=>item.id));
+    const remoteActions=mapRows(actionRows,18);
+    for(const [id,row] of Object.entries(remoteActions)){
+      if(knownActions.has(id)){
+        const local=staged.progress.actions.find(item=>item.id===id)
+          ||staged.progress.sheetActions.find(item=>item.id===id);
+        let importedFields=0,keptFields=0;
+        if(local){
+          for(const [indexText,key] of Object.entries(AF)){
+            const index=Number(indexText),remoteValue=row.values[index];
+            if(index===0||!remoteValue.trim())continue;
+            const localValue=String(local[key]??'');
+            if(!localValue.trim()){
+              local[key]=remoteValue;
+              importedFields++;
+            }else if(localValue!==remoteValue)keptFields++;
+          }
+        }
+        if(importedFields){
+          summary.actionFieldsImported+=importedFields;
+          summary.actionRecordsUpdated++;
+        }
+        summary.localFieldsKept+=keptFields;
+        if(keptFields)summary.localRecordsKept++;
+        continue;
+      }
+      const action={id,status:row.values[10].trim()||'未着手'};
+      let importedFields=0;
+      for(const [indexText,key] of Object.entries(AF)){
+        const index=Number(indexText);
+        if(index===0||!row.values[index].trim())continue;
+        action[key]=row.values[index];
+        importedFields++;
+      }
+      if(!importedFields)continue;
+      action.origin='Google Sheets';
+      staged.progress.sheetActions.push(action);
+      knownActions.add(id);
+      summary.actionRecordsAdded++;
+      summary.actionFieldsImported+=importedFields;
+    }
+    summary.recordsAdded=summary.workRecordsAdded+summary.actionRecordsAdded;
+    summary.fieldsImported=summary.workFieldsImported+summary.actionFieldsImported;
+    summary.recordsImported=summary.recordsAdded+summary.workRecordsUpdated+summary.actionRecordsUpdated;
+    return {data:staged,summary};
   }
   function countPending(data,base){
     if(!base)return 0;
@@ -314,6 +433,6 @@ window.GoalWriteback=(function(){
       throw Error(stage+'で停止しました。確認できた処理は少なくとも'+changed+'項目です。Sheetsを再確認してから差分確認をやり直してください。'+error.message);
     }
   }
-  return {commit,load,baselineFromRows,differences,countPending,preview,applyRemoteField,destructiveChanges,confirmDestructiveChanges,canAutoSync,
+  return {commit,load,baselineFromRows,differences,countPending,preview,reviewCounts,importInitial,applyRemoteField,destructiveChanges,confirmDestructiveChanges,canAutoSync,
     readOnlyScope:READ_ONLY_SCOPE,writeScope:WRITE_SCOPE,workFields:WF,actionFields:AF,workHeaders:WORK_HEADERS,actionHeaders:ACTION_HEADERS};
 })();
