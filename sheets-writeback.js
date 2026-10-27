@@ -10,6 +10,44 @@ window.GoalWriteback=(function(){
   const AF={0:'id',1:'goalId',2:'theme',3:'title',4:'minimum',5:'expected',6:'start',7:'due',8:'horizon',9:'priority',10:'status',11:'note',12:'technical',13:'adaptive',14:'createdAt',15:'updatedAt',16:'completedAt',17:'source'};
   const BOOL=new Set([7,8,12,22]);
   const workDate=/^\d{4}-\d{2}-\d{2}$/;
+  const READ_ONLY_SCOPE='https://www.googleapis.com/auth/spreadsheets.readonly';
+  const WRITE_SCOPE='https://www.googleapis.com/auth/spreadsheets';
+  function canAutoSync({enabled,approved,baseline,restoreGuard,blocked}){
+    return Boolean(enabled&&approved&&baseline&&!restoreGuard&&!blocked);
+  }
+  function isBlank(value){
+    return value===null||value===undefined||(typeof value==='string'&&value.trim()==='');
+  }
+  function reviewKey(field){return [field.kind,field.id,field.index].join('\u0001');}
+  function destructiveChanges(fields,choices){
+    return fields.flatMap(field=>{
+      const selected=choices[reviewKey(field)];
+      if(selected!=='device'&&selected!=='sheets')return [];
+      const selectedValue=selected==='device'?field.localValue:field.remoteValue;
+      const destinationValue=selected==='device'?field.remoteValue:field.localValue;
+      if(!isBlank(selectedValue)||isBlank(destinationValue))return [];
+      return [{field,selected,destinationValue}];
+    });
+  }
+  function confirmDestructiveChanges(changes,confirmFn){
+    if(!changes.length)return true;
+    const format=value=>value===null||value===undefined?'未設定'
+      :typeof value==='string'&&value.trim()===''?(value===''?'空欄':'空欄（空白文字のみ）'):String(value);
+    const details=changes.map(({field,selected,destinationValue},index)=>{
+      const record=field.kind==='work'?'ワーク記録':'アクション';
+      const date=field.kind==='work'?'日付：'+field.id:'アクションID：'+field.id;
+      const destination=selected==='device'?'Google Sheets':'端末';
+      return [
+        `${index+1}. ${record} / ${date} / ${field.label||field.key||'項目'}`,
+        `   端末の記録：${format(field.localValue)}`,
+        `   Google Sheetsの記録：${format(field.remoteValue)}`,
+        `   消去される場所と値：${destination}の「${format(destinationValue)}」`
+      ].join('\n');
+    }).join('\n\n');
+    return confirmFn(
+      `選択内容を反映すると、次の既存値${changes.length}件が消去されます。\n\n${details}\n\nこの値を消去して続けますか？`
+    )===true;
+  }
   function cell(v,isBool){
     if(isBool) return ['TRUE','true','1','yes','はい','済','達成'].includes(String(v??'').trim())?'TRUE':'FALSE';
     return String(v??'');
@@ -63,13 +101,94 @@ window.GoalWriteback=(function(){
     }
     return {output,conflicts};
   }
+  function preview(data,baseline,workRows,actionRows){
+    const remoteWork=mapRows(workRows,24),remoteActions=mapRows(actionRows,18);
+    const localActions=Object.fromEntries((data.progress?.actions||[]).filter(x=>x.id).map(x=>[x.id,x]));
+    const groups=[];
+    const reviewValue=(value,isBool)=>{
+      const raw=String(value??'');
+      return isBool&&raw.trim()?cell(raw,true):raw;
+    };
+    function collect(kind,local,base,remote,fields,isWork){
+      const ids=new Set([...Object.keys(local||{}),...Object.keys(base||{}),...Object.keys(remote||{})]);
+      for(const id of ids){
+        const item=local?.[id]||null,old=base?.[id]||null,server=remote?.[id]?.values||null;
+        const values=[];
+        for(const [indexText,key] of Object.entries(fields)){
+          const index=Number(indexText),isBool=isWork&&BOOL.has(index);
+          const rawLocalValue=item?(isWork?localWorkValue(item,index):localActionValue(item,index)):null;
+          const baseValue=old?reviewValue(old[index],isBool):null;
+          const remoteValue=server?reviewValue(server[index],isBool):null;
+          const localValue=isBool&&rawLocalValue==='FALSE'&&(!old||reviewValue(old[index],true)==='')?'':rawLocalValue;
+          const deletionRisk=Boolean(old&&(!item||!server));
+          const localSet=localValue!==null&&hasValue(localValue,isBool);
+          const remoteSet=remoteValue!==null&&hasValue(remoteValue,isBool);
+          const baseSet=baseValue!==null&&hasValue(baseValue,isBool);
+          const valueClearRisk=Boolean(old&&baseSet&&(!localSet||!remoteSet));
+          const bothEmpty=(localValue===null||localValue==='')&&(remoteValue===null||remoteValue==='');
+          if((localValue===remoteValue||bothEmpty)&&!deletionRisk&&!valueClearRisk)continue;
+          const localChanged=old?localValue!==baseValue:localSet;
+          const remoteChanged=old?remoteValue!==baseValue:remoteSet;
+          let status;
+          if(deletionRisk||valueClearRisk)status='削除・空欄化の可能性';
+          else if(localSet&&!remoteSet)status='端末だけに存在';
+          else if(remoteSet&&!localSet)status='Sheetsだけに存在';
+          else if(localChanged&&remoteChanged)status='両方で変更（競合）';
+          else if(localChanged)status='端末で変更';
+          else if(remoteChanged)status='Sheetsで変更';
+          else status='内容が異なる';
+          values.push({kind,id,index,key,label:isWork?WORK_HEADERS[index]:ACTION_HEADERS[index],
+            localValue,remoteValue,baseValue,status});
+        }
+        if(!values.length){
+          const localPresent=Object.values(fields).some(key=>{
+            const value=item?.[key];
+            return typeof value==='boolean'?value:String(value??'').trim()!=='';
+          });
+          const remotePresent=Boolean(server&&server.some(v=>String(v??'').trim()!==''));
+          if(localPresent||remotePresent)groups.push({kind,id,status:'一致',values:[]});
+        }else{
+          groups.push({kind,id,status:values.some(v=>v.status==='両方で変更（競合）')?'両方で変更（競合）':values.some(v=>v.status==='削除・空欄化の可能性')?'削除・空欄化の可能性':values[0].status,values});
+        }
+      }
+    }
+    collect('work',data.entries,baseline?.work,remoteWork,WF,true);
+    collect('action',localActions,baseline?.actions,remoteActions,AF,false);
+    return groups;
+  }
+  function applyRemoteField(data,kind,id,index,value){
+    const fields=kind==='work'?WF:AF,key=fields[index];
+    if(!key)throw Error('同期対象外の項目です');
+    if(kind==='work'){
+      const item=data.entries[id]||(data.entries[id]={});
+      if(BOOL.has(Number(index)))item[key]=value==='TRUE';
+      else item[key]=String(value??'');
+      if(!item.lessonNotes)item.lessonNotes={};
+      if(key==='lessonReflection'||key==='lessonNextStep'||key==='lessonReviewed'){
+        const lessonId=item.lessonId;
+        if(lessonId){
+          const note=item.lessonNotes[lessonId]||(item.lessonNotes[lessonId]={reflection:'',nextStep:'',reviewed:false});
+          if(key==='lessonReflection')note.reflection=item[key];
+          else if(key==='lessonNextStep')note.nextStep=item[key];
+          else note.reviewed=item[key];
+        }
+      }
+      return;
+    }
+    if(!data.progress)data.progress={actions:[]};
+    if(!Array.isArray(data.progress.actions))data.progress.actions=[];
+    let item=data.progress.actions.find(a=>a.id===id);
+    if(!item){item={id};data.progress.actions.push(item);}
+    item[key]=String(value??'');
+  }
   function countPending(data,base){
     if(!base)return 0;
     const current=(v)=>Object.fromEntries(Object.entries(v||{}).map(([id,row])=>[id,{index:1,values:row}]));
-    const work=differences(data.entries,base.work||{},current(base.work),'work').output.length;
+    const work=differences(data.entries,base.work||{},current(base.work),'work');
     const actions=Object.fromEntries((data.progress?.actions||[]).filter(x=>x.id).map(x=>[x.id,x]));
-    const changed=differences(actions,base.actions||{},current(base.actions),'action').output.length;
-    return work+changed;
+    const changed=differences(actions,base.actions||{},current(base.actions),'action');
+    if(work.conflicts.length||changed.conflicts.length)return Number.POSITIVE_INFINITY;
+    return work.output.length+changed.output.length;
   }
   async function request(url,token,options={}){
     const headers={Authorization:'Bearer '+token,...(options.headers||{})};
@@ -97,11 +216,17 @@ window.GoalWriteback=(function(){
       range:"'"+name+"'!"+String.fromCharCode(65+p.index)+(remote[p.id].index),
       values:[[p.value]]
     }));
+    let completed=0;
     for(let start=0;start<data.length;start+=100){
-      await request('https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(id)+'/values:batchUpdate',
-        token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data.slice(start,start+100)})});
+      try{
+        await request('https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(id)+'/values:batchUpdate',
+          token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data.slice(start,start+100)})});
+        completed+=Math.min(100,data.length-start);
+      }catch(error){
+        throw Error(name+'の更新中に失敗しました。更新済みは少なくとも'+completed+'項目です。'+error.message);
+      }
     }
-    return data.length;
+    return completed;
   }
   async function appendNew(id,token,patches,remote,name,width){
     const grouped=new Map();
@@ -110,12 +235,18 @@ window.GoalWriteback=(function(){
       grouped.get(p.id)[p.index]=p.value;
     });
     // Append is only used for genuinely missing IDs, never for existing rows.
+    let completed=0;
     for(const values of grouped.values()){
       const url=root(id)+encodeURIComponent("'"+name+"'!A1:"+String.fromCharCode(64+width))
         +':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS';
-      await request(url,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[values]})});
+      try{
+        await request(url,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[values]})});
+        completed++;
+      }catch(error){
+        throw Error(name+'の行追加中に失敗しました。追加済みは少なくとも'+completed+'行です。'+error.message);
+      }
     }
-    return grouped.size;
+    return completed;
   }
   function actionHistoryRow(item){
     const a=item.after||{};
@@ -143,10 +274,14 @@ window.GoalWriteback=(function(){
     }
     return additions.length;
   }
-  async function commit({sheetId,token,data,baseline}){
+  async function commit({sheetId,token,data,baseline,expectedRows,includeActionHistory=false}){
     if(!/^[A-Za-z0-9_-]{20,}$/.test(sheetId))throw Error('スプレッドシートIDが未設定です');
     if(!token)throw Error('Google認証が必要です');
     const live=await load(sheetId,token);
+    if(expectedRows&&(JSON.stringify(live.workRows)!==JSON.stringify(expectedRows.workRows)
+      ||JSON.stringify(live.actionRows)!==JSON.stringify(expectedRows.actionRows))){
+      throw Error('差分確認後にGoogle Sheetsの内容が変わりました。書き込まず、もう一度差分を確認してください');
+    }
     const remoteWork=mapRows(live.workRows,24),remoteActions=mapRows(live.actionRows,18);
     const localActions=Object.fromEntries((data.progress?.actions||[]).filter(x=>x.id).map(x=>[x.id,x]));
     const w=differences(data.entries,baseline?.work||{},remoteWork,'work');
@@ -155,20 +290,30 @@ window.GoalWriteback=(function(){
     if(conflicts.length)throw Error('他の端末／ChatGPTと変更が重複しています。自動上書きせず中止しました：'+conflicts.slice(0,5).join('、')+(conflicts.length>5?' ほか':''));
     // Changes from the app's action log are appended, never replaced.
     // Do this even after an interrupted previous attempt in which the main action row was written.
-    if(!w.output.length&&!a.output.length){const h=await writeActionHistory(sheetId,token,data.progress?.actionHistory);return {count:h,...live};}
+    if(!w.output.length&&!a.output.length){
+      const h=includeActionHistory?await writeActionHistory(sheetId,token,data.progress?.actionHistory):0;
+      return {count:h,...live};
+    }
     // One user-triggered attempt. A failed partial attempt is safe to retry: cells already
     // equal the requested value are skipped, and new IDs are found on the next read.
-    let changed=0;
-    changed+=await writeExisting(sheetId,token,w.output,remoteWork,'ワーク記録',24);
-    changed+=await appendNew(sheetId,token,w.output,remoteWork,'ワーク記録',24);
-    changed+=await writeExisting(sheetId,token,a.output,remoteActions,'アクション一覧',18);
-    changed+=await appendNew(sheetId,token,a.output,remoteActions,'アクション一覧',18);
-    changed+=await writeActionHistory(sheetId,token,data.progress?.actionHistory);
-    const after=await load(sheetId,token);
-    const rowsW=mapRows(after.workRows,24),rowsA=mapRows(after.actionRows,18);
-    for(const p of w.output)if(cell(rowsW[p.id]?.values[p.index],BOOL.has(p.index))!==p.value)throw Error('ワーク記録の書き込み確認に失敗しました');
-    for(const p of a.output)if(String(rowsA[p.id]?.values[p.index]??'')!==p.value)throw Error('アクション一覧の書き込み確認に失敗しました');
-    return {count:changed,...after};
+    let changed=0,stage='ワーク記録の更新';
+    try{
+      changed+=await writeExisting(sheetId,token,w.output,remoteWork,'ワーク記録',24);
+      changed+=await appendNew(sheetId,token,w.output,remoteWork,'ワーク記録',24);
+      stage='アクション一覧の更新';
+      changed+=await writeExisting(sheetId,token,a.output,remoteActions,'アクション一覧',18);
+      changed+=await appendNew(sheetId,token,a.output,remoteActions,'アクション一覧',18);
+      if(includeActionHistory){stage='アクション履歴の追加';changed+=await writeActionHistory(sheetId,token,data.progress?.actionHistory);}
+      stage='保存結果の再確認';
+      const after=await load(sheetId,token);
+      const rowsW=mapRows(after.workRows,24),rowsA=mapRows(after.actionRows,18);
+      for(const p of w.output)if(cell(rowsW[p.id]?.values[p.index],BOOL.has(p.index))!==p.value)throw Error('ワーク記録の書き込み確認に失敗しました');
+      for(const p of a.output)if(String(rowsA[p.id]?.values[p.index]??'')!==p.value)throw Error('アクション一覧の書き込み確認に失敗しました');
+      return {count:changed,...after};
+    }catch(error){
+      throw Error(stage+'で停止しました。確認できた処理は少なくとも'+changed+'項目です。Sheetsを再確認してから差分確認をやり直してください。'+error.message);
+    }
   }
-  return {commit,load,baselineFromRows,differences,countPending,workFields:WF,actionFields:AF};
+  return {commit,load,baselineFromRows,differences,countPending,preview,applyRemoteField,destructiveChanges,confirmDestructiveChanges,canAutoSync,
+    readOnlyScope:READ_ONLY_SCOPE,writeScope:WRITE_SCOPE,workFields:WF,actionFields:AF,workHeaders:WORK_HEADERS,actionHeaders:ACTION_HEADERS};
 })();
