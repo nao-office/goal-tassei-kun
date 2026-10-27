@@ -4,6 +4,11 @@ on:
     paths:
       - 'worker/**'
       - 'index.html'
+      - 'sheets-writeback.js'
+      - 'sheets-writeback.test.js'
+      - 'goal-progress.js'
+      - 'goal-progress.test.js'
+      - 'README.md'
       - '.github/workflows/cloudflare-auth-tests.yml'
   push:
     branches: [main]
@@ -18,8 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test Worker OAuth flow
-        run: node --test worker/auth.test.js
+      - name: Test OAuth and synchronization safety
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-progress.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -28,5 +33,7 @@ jobs:
           const inline=html.match(/<script>([\s\S]*?)<\/script>/);
           if(!inline)throw Error('Inline script not found');
           new Function(inline[1]);
+          new Function(fs.readFileSync('sheets-writeback.js','utf8'));
+          new Function(fs.readFileSync('goal-progress.js','utf8'));
           console.log('index.html JavaScript syntax OK');
           NODE

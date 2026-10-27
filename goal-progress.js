@@ -53,7 +53,19 @@ window.GoalProgress = (function () {
       return {at:v(0),kind:v(1),id:v(2),reason:v(20),before:null,after:{id:v(2),goalId:v(3),theme:v(4),title:v(5),minimum:v(6),expected:v(7),start:v(8),due:v(9),horizon:v(10),priority:v(11),status:v(12),note:v(13),technical:v(14),adaptive:v(15),createdAt:v(16),updatedAt:v(17),completedAt:v(18),source:v(19)}};
     });
     var prop={'アクションの種':'actionIdeas','アクション一覧':'sheetActions','アクション履歴':'sheetHistory','週間計画':'weekPlans'}[name];
-    data.progress[prop]=arr;
+    var existing=Array.isArray(data.progress[prop])?data.progress[prop]:[];
+    if(prop==='sheetHistory'){
+      var signatures=new Set(existing.map(function(x){return [x.at||'',x.id||'',x.reason||''].join('\u0001');}));
+      data.progress[prop]=existing.concat(arr.filter(function(x){
+        var signature=[x.at||'',x.id||'',x.reason||''].join('\u0001');
+        if(signatures.has(signature))return false;
+        signatures.add(signature);return true;
+      }));
+    }else{
+      var byId=new Map(existing.filter(function(x){return x&&x.id;}).map(function(x){return [x.id,x];}));
+      arr.forEach(function(x){if(!byId.has(x.id))byId.set(x.id,x);});
+      data.progress[prop]=Array.from(byId.values());
+    }
     if(!save())throw Error('端末への同期結果保存に失敗しました');
     return arr.length;
   }
@@ -246,5 +258,5 @@ window.GoalProgress = (function () {
     if(event.target.matches('[name="reviewGoalId"]')){selectedGoal=event.target.value;ctx.render();return true;}
     return false;
   }
-  return {empty:empty,normalize:normalize,render:render,capture:capture,change:change,importSheet:importSheet,actionList:actionList};
+  return {empty:empty,normalize:normalize,render:render,capture:capture,change:change,importSheet:importSheet,actionList:actionList,remoteHeaders:REMOTE_HEADERS};
 })();
