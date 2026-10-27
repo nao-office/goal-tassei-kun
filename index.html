@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="goal-progress.css">
   <script src="goal-progress.js"></script>
   <script src="sheets-writeback.js"></script>
+  <script src="cloud-auth.js"></script>
   <style>
     :root{color-scheme:light;--ink:#1c2e37;--deep:#162a37;--muted:#667986;--line:#e5ebee;--bg:#f6f8f7;--white:#fff;--mint:#c1eddb;--green:#21745a;--pale:#eaf6ef;--orange:#f8e5d0;--danger:#a94743;--shadow:0 10px 38px rgba(33,54,60,.06)}
     *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;color:var(--ink);line-height:1.65;min-height:100vh}
@@ -122,7 +123,7 @@
   let syncReview=null,syncReviewChoices={},safeSyncApproved=false,enableAutoAfterReview=false;
   let backupRestoreSyncGuard=false;
   let autoSyncEnabled=false,autoWriteToken=false,autoTokenExpiresAt=0,autoAuthBusy=false,autoSyncBlocked=false,autoSaveTimer=null,autoSilentSync=false,autoRenderDeferred=false,autoRetryAfter=0;
-  let cloudWorkerUrl='',cloudSession='';
+  let cloudWorkerUrl='',cloudSession='',authNeedsRelogin=false;
   const GOAL_PERIODS=["1か月","3か月","1年","3年","5年"];
   const GOAL_HEADERS=["ゴールID","テーマ","期間","定性ゴール","定量ゴール（値・条件）","単位","達成期限","未来の景色","在り方（BE）","ゴールの理由","状態","作成日","最終更新日","最終確認日","メモ"];
   const GOAL_HISTORY_HEADERS=["変更日時（JST）","ゴールID","操作","テーマ","期間","定性ゴール","定量ゴール（値・条件）","単位","達成期限","未来の景色","在り方（BE）","ゴールの理由","状態","変更理由","変更前の更新日時","記録元"];
@@ -448,27 +449,46 @@
       return u.protocol==='https:'&&!u.username&&!u.password&&!u.search&&!u.hash&&(u.pathname==='/'||u.pathname==='')?u.origin:'';
     }catch(e){return '';}
   }
-  function startCloudAuth(){
+  function startCloudAuth(relogin=false){
     if(!cloudWorkerUrl){go('sync');syncStatusMessage('先にCloudflare WorkerのHTTPS URLを設定してください');return;}
-    const message='Googleにログインして、端末とSheetsの差分を読み取り確認します。確認が終わるまで自動同期や書き込みは行いません。続けますか？';
+    if(relogin&&(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)){
+      syncStatusMessage('同期処理中は再ログインできません。処理が終わってからお試しください');return;
+    }
+    const message=relogin
+      ?'Googleへ再ログインします。端末の記録、Sheetsの記録、スプレッドシートIDは変更しません。再ログイン後も自動同期は停止し、まず差分を確認できます。続けますか？'
+      :'Googleにログインして、端末とSheetsの差分を読み取り確認します。確認が終わるまで自動同期や書き込みは行いません。続けますか？';
     if(!confirm(message))return;
+    if(relogin){
+      try{clearCloudSessionForRelogin();}
+      catch(error){syncStatusMessage('認証状態を安全に更新できませんでした。記録は変更していません。ブラウザーの保存領域を確認してください');return;}
+    }
     location.assign(cloudWorkerUrl+'/auth/start');
+  }
+  function clearCloudSessionForRelogin(){
+    autoSyncEnabled=false;autoWriteToken=false;autoSyncBlocked=false;autoRetryAfter=0;
+    googleToken='';googleTokenWritable=false;autoTokenExpiresAt=0;cloudSession='';enableAutoAfterReview=false;
+    authNeedsRelogin=true;
+    GoalCloudAuth.clearSession(localStorage,{
+      sessionKey:CLOUD_SESSION_KEY,autoSyncKey:AUTO_SYNC_KEY,autoEnableAfterReviewKey:AUTO_ENABLE_AFTER_REVIEW_KEY
+    });
+    updateAutoSyncNotice();
   }
   async function connectCloudSessionForManualUse(onConnected){
     if(!cloudWorkerUrl||!cloudSession||syncAuthBusy||syncBusy||writeBusy)return;
     syncAuthBusy=true;
     try{
-      const res=await fetch(cloudWorkerUrl+'/auth/token',{
-        headers:{Authorization:'Bearer '+cloudSession},cache:'no-store'
-      });
-      if(!res.ok)throw Error('Googleの認証情報を取得できません（'+res.status+'）');
-      const body=await res.json();
-      if(!body.access_token)throw Error('Googleの認証情報を取得できませんでした');
-      googleToken=body.access_token;
+      googleToken=await GoalCloudAuth.requestAccessToken(fetch,cloudWorkerUrl,cloudSession);
       googleTokenWritable=true;
     }catch(error){
       googleToken='';
-      syncStatusMessage('Googleへの接続を確認できません：'+error.message);
+      googleTokenWritable=false;
+      if(error.status===401){
+        try{clearCloudSessionForRelogin();}
+        catch(storageError){syncStatusMessage('認証状態を安全に更新できませんでした。記録は変更していません。ブラウザーの保存領域を確認してください');return;}
+      }
+      syncStatusMessage(error instanceof TypeError
+        ?'Googleへの接続を確認できません。ネット接続とCloudflare WorkerのURLを確認してください。'
+        :error.message||'Googleへの接続を確認できません。端末の記録は変更していません。');
       return;
     }finally{
       syncAuthBusy=false;
@@ -485,11 +505,10 @@
       });
       if(!res.ok){
         if(res.status===401){
-          cloudSession='';
-          try{localStorage.removeItem(CLOUD_SESSION_KEY);}catch(e){}
-          throw Error('Googleのログイン期限が切れました。Google連携からもう一度ログインしてください');
+          clearCloudSessionForRelogin();
+          throw Error(GoalCloudAuth.errorMessage(res.status));
         }
-        throw Error('認証サーバーに接続できません（'+res.status+'）');
+        throw Error(GoalCloudAuth.errorMessage(res.status));
       }
       const body=await res.json();
       if(!body.access_token)throw Error('Googleの認証情報を取得できませんでした');
@@ -531,11 +550,15 @@
       if(!res.ok)throw Error('ログイン結果を受け取れませんでした（'+res.status+'）');
       const body=await res.json();
       if(!/^[A-Za-z0-9_-]{43}$/.test(body.session||''))throw Error('ログイン結果の形式が不正です');
+      GoalCloudAuth.saveSession(localStorage,{
+        sessionKey:CLOUD_SESSION_KEY,autoSyncKey:AUTO_SYNC_KEY,autoEnableAfterReviewKey:AUTO_ENABLE_AFTER_REVIEW_KEY
+      },body.session);
       cloudSession=body.session;
-      localStorage.setItem(CLOUD_SESSION_KEY,cloudSession);
+      authNeedsRelogin=false;
       autoSyncEnabled=false;
       autoWriteToken=false;
-      localStorage.setItem(AUTO_SYNC_KEY,'0');
+      googleToken='';googleTokenWritable=false;
+      enableAutoAfterReview=false;
       autoRetryAfter=0;
       showToast('Googleに接続しました。差分を確認するまで同期は停止しています。');
     }catch(error){
@@ -620,7 +643,7 @@
     try{localStorage.setItem(AUTO_SYNC_KEY,'0');}catch(e){}
     render();syncStatusMessage('自動同期を停止しました。端末内の記録は残ります。');
   }
-  function renderSync(){const connected=Boolean(googleToken);return header('ChatGPTとGoogle Sheetsをつなぐ','朝の宣言も、夜の振り返りも。会話の結果をこのアプリへ取り込もう。')+`<div class="stack">
+  function renderSync(){const connected=Boolean(googleToken);const reloginControl=`<section class="form-panel"><div class="panelh"><h3>Googleアカウントの再接続</h3></div><p class="muted-text">${authNeedsRelogin?'Googleの接続期限が切れたか、認証が無効になっています。再ログイン後、差分を読み取り確認できます。':'接続に問題がある場合は、Googleへ再ログインできます。端末とSheetsの記録は変更せず、自動同期も開始しません。'}</p><div class="foot-actions">${button('Googleに再ログイン','relogin-google','outline')}</div></section>`;return header('ChatGPTとGoogle Sheetsをつなぐ','朝の宣言も、夜の振り返りも。会話の結果をこのアプリへ取り込もう。')+reloginControl+`<div class="stack">
    <section class="form-panel"><div class="panelh"><h3>① 記録先のGoogleスプレッドシート</h3><span class="chip gray">この端末の設定</span></div><p class="muted-text">Google SheetsのURLにある <code>/d/</code> と <code>/edit</code> の間のIDを入力してください。IDはこのブラウザー内に保存します。差分確認・同期ではGoogle Driveの設定ファイルを読み書きしません。別の端末では同じIDを入力してください。</p><div class="field"><label for="sheetId">GoogleスプレッドシートのID</label><input id="sheetId" type="text" maxlength="4000" data-config="sheetId" placeholder="シートのURLにある長い英数字" value="${esc(syncConfig.sheetId)}" autocomplete="off"></div><div class="sync-kv"><div><strong>セルフエフィカシーワーク記録</strong><div class="sync-small">朝・夜のワーク記録の対応項目を確認後に同期</div></div>${/^[a-zA-Z0-9_-]{20,}$/.test(syncConfig.sheetId)?`<a class="button outline" href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(syncConfig.sheetId)}/edit" target="_blank" rel="noopener noreferrer">シートを開く ↗</a>`:'<span class="smallmuted">シートIDを入力してください</span>'}</div></section>
    <section class="form-panel"><div class="panelh"><h3>② Googleから差分を確認</h3><span class="${connected?'chip':'chip gray'}">${connected?'この画面では認証済み':'Google認証が必要'}</span></div><p class="muted-text">「差分を確認」はSheetsの対象タブを読むだけです。端末の記録・同期基準・Google Sheets・Google Drive内の設定は変更しません。初回同期・復元後・競合時・同期基準がない場合は、項目ごとの選択が必要です。</p><div class="field"><label for="workerUrl">Cloudflare WorkerのURL（初回のみ設定）</label><p class="hint">例：https://goal-tassei-auth.example.workers.dev　Workerを先に公開し、Google CloudでリダイレクトURIを登録してください。<a href="https://github.com/nao-office/goal-tassei-kun/blob/main/worker/README.md" target="_blank" rel="noopener noreferrer">設定手順</a></p><input id="workerUrl" type="url" data-config="workerUrl" placeholder="https://xxxx.workers.dev" value="${esc(cloudWorkerUrl)}" autocomplete="off"></div><div class="field"><label for="clientId">Google Cloudで作成したOAuthクライアントID</label><p class="hint">従来のブラウザー認証用（Cloudflare Worker方式では入力不要）。</p><input id="clientId" type="text" maxlength="4000" data-config="clientId" placeholder="123456789-xxxx.apps.googleusercontent.com" value="${esc(syncConfig.clientId)}" autocomplete="off"></div><div class="foot-actions">${button('差分を確認（読み取りのみ）','google-sync','dark')}${button('確認した差分を同期','save-writeback','secondary')}${button(autoSyncEnabled?(autoSyncBlocked||!autoWriteToken?'自動同期を再確認':'自動同期を停止'):'自動同期を有効にする','toggle-auto-sync','secondary')}${autoSyncEnabled&&(autoSyncBlocked||!autoWriteToken)?button('自動同期を停止','disable-auto-sync','outline'):''}${button('端末のJSONバックアップ','export','outline')}${button('バックアップから復元','import','outline')}${button('接続設定の説明','setup-guide','outline')}</div><p class="sync-small">自動同期は差分確認が完了し、同期基準が有効で、競合やSheets側の変更がない場合だけ行います。安全が確認できない場合は停止します。認証や通信が必要な場合も、確認なしで書き込みません。</p></section>
    <section class="form-panel"><div class="panelh"><h3>③ OAuth設定前の取り込み方法</h3><span class="chip gray">すぐ試せる</span></div><p class="muted-text">シートの「ファイル → ダウンロード → カンマ区切り形式（.csv）」で<strong>「ワーク記録」タブ</strong>を開いた状態で保存し、ここで読み込みます。朝・夜・講義の学び（S～X列）をまとめて取り込めます。Googleアカウント認証の設定なしでも動作します。</p><div class="foot-actions">${button('CSVファイルを取り込む ↑','sync-csv','secondary')}</div></section>
@@ -938,6 +961,12 @@
   function go(to,date=null){if(date)activeDate=date;else if(to==='home'||to==='morning'||to==='evening')activeDate=jstToday();tab=to;render();scrollTo({top:0,behavior:'instant'});}
   function showToast(message){if(autoSilentSync&&/同期しました|取り込みました/.test(message))return;const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2800)}
   function exportData(){const json=JSON.stringify({...data,exportedAt:new Date().toISOString()},null,2);const blob=new Blob([json],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`mirai-goal-backup-${jstToday()}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast('バックアップをダウンロードしました。')}
+  document.addEventListener('click',ev=>{
+    const button=ev.target.closest?.('[data-action="relogin-google"]');
+    if(!button)return;
+    ev.preventDefault();ev.stopImmediatePropagation();
+    startCloudAuth(true);
+  },true);
   document.addEventListener('change',ev=>{
     const choice=ev.target.closest?.('[data-sync-choice]');
     if(!choice)return;
