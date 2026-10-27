@@ -106,6 +106,87 @@ test('preview distinguishes blank cells from missing values and flags deletions'
   assert.ok(deleted.flatMap(group=>group.values).some(item=>item.status==='削除・空欄化の可能性'));
 });
 
+test('a Sheets-only action remains an import candidate, not a deletion risk, with an existing baseline',()=>{
+  const actionRows=[sync.actionHeaders,row(sync.actionHeaders,{0:'a-1',3:'Sheets action'})];
+  const workRows=[sync.workHeaders,row(sync.workHeaders,{0:'2026-10-27',1:'Sheets work'})];
+  const baseline=sync.baselineFromRows(workRows,actionRows);
+  const groups=sync.preview({entries:{},progress:{actions:[]}},baseline,workRows,actionRows);
+  for(const kind of ['work','action']){
+    const fields=groups.filter(group=>group.kind===kind).flatMap(group=>group.values);
+    assert.ok(fields.length>0);
+    assert.ok(fields.every(field=>field.status==='Sheetsだけに存在'));
+    assert.ok(fields.every(field=>field.status!=='削除・空欄化の可能性'));
+  }
+});
+
+test('review counts distinguish changed records, equal records, and changed fields',()=>{
+  const groups=[
+    {values:[{},{}]},
+    {values:[{}]},
+    {values:[]}
+  ];
+  assert.deepEqual(sync.reviewCounts(groups),{
+    comparedRecords:3,changedRecords:2,equalRecords:1,changedFields:3
+  });
+});
+
+test('initial import adds Sheets records and preserves terminal-only data and matching local values',()=>{
+  const workRows=[
+    sync.workHeaders,
+    row(sync.workHeaders,{0:'2026-10-27',1:'Sheets reason',2:'Sheets belief',7:'TRUE',18:'lesson-1',20:'Sheets lesson memo'}),
+    row(sync.workHeaders,{0:'2026-10-28',1:'New day from Sheets',3:'New action'})
+  ];
+  const actionRows=[
+    sync.actionHeaders,
+    row(sync.actionHeaders,{0:'a-sheets',1:'g-1',3:'New action from Sheets'}),
+    row(sync.actionHeaders,{0:'a-local',3:'Sheets title',10:'進行中'})
+  ];
+  const localAction={id:'a-local',title:'端末のタイトル',note:'端末だけのメモ'};
+  const goal={id:'g-local',title:'端末だけのゴール'};
+  const data={
+    entries:{
+      '2026-10-27':{fit:'端末の理由',normal:'',minimumDone:false,lessonId:'lesson-1',lessonNotes:{'lesson-1':{reflection:'端末の復習メモ',nextStep:'',reviewed:false}},goalSnapshot:'端末のゴール状態'},
+      '2026-10-29':{fit:'端末だけの別日'}
+    },
+    goals:[goal],
+    progress:{actions:[localAction],sheetActions:[],actionHistory:[{id:'history-1'}],reviews:[{id:'review-1'}]}
+  };
+  const before=JSON.stringify(data);
+  const result=sync.importInitial(data,workRows,actionRows);
+  assert.equal(JSON.stringify(data),before);
+  assert.equal(result.summary.workRecordsAdded,1);
+  assert.equal(result.summary.workRecordsUpdated,1);
+  assert.equal(result.summary.actionRecordsAdded,1);
+  assert.equal(result.summary.actionRecordsUpdated,1);
+  assert.equal(result.summary.recordsImported,4);
+  assert.equal(result.data.entries['2026-10-27'].fit,'端末の理由');
+  assert.equal(result.data.entries['2026-10-27'].normal,'Sheets belief');
+  assert.equal(result.data.entries['2026-10-27'].minimumDone,false);
+  assert.equal(result.data.entries['2026-10-27'].lessonNotes['lesson-1'].reflection,'端末の復習メモ');
+  assert.equal(result.data.entries['2026-10-27'].goalSnapshot,'端末のゴール状態');
+  assert.equal(result.data.entries['2026-10-28'].fit,'New day from Sheets');
+  assert.equal(result.data.entries['2026-10-29'].fit,'端末だけの別日');
+  assert.deepEqual(result.data.goals[0],goal);
+  assert.equal(result.data.progress.actions[0].title,'端末のタイトル');
+  assert.equal(result.data.progress.actions[0].note,'端末だけのメモ');
+  assert.equal(result.data.progress.sheetActions[0].title,'New action from Sheets');
+  assert.deepEqual(result.data.progress.actionHistory[0],{id:'history-1'});
+  assert.deepEqual(result.data.progress.reviews[0],{id:'review-1'});
+  assert.ok(result.summary.localFieldsKept>=2);
+});
+
+test('initial import ignores empty Sheets cells and imports explicit false for a new work record',()=>{
+  const workRows=[
+    sync.workHeaders,
+    row(sync.workHeaders,{0:'2026-10-27',1:'',7:'FALSE'}),
+    row(sync.workHeaders,{0:'2026-10-28',1:'New record',7:'FALSE'})
+  ];
+  const result=sync.importInitial({entries:{},progress:{actions:[],sheetActions:[]}},workRows,[sync.actionHeaders]);
+  assert.equal(result.data.entries['2026-10-27'].minimumDone,false);
+  assert.equal(result.data.entries['2026-10-28'].fit,'New record');
+  assert.equal(result.data.entries['2026-10-28'].minimumDone,false);
+});
+
 test('choosing Sheets values only updates the provided staged data',()=>{
   const staged={entries:{'2026-10-27':{fit:'端末'}},progress:{actions:[]}};
   sync.applyRemoteField(staged,'work','2026-10-27',1,'Sheets');
