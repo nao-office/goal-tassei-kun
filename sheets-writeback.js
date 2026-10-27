@@ -10,6 +10,44 @@ window.GoalWriteback=(function(){
   const AF={0:'id',1:'goalId',2:'theme',3:'title',4:'minimum',5:'expected',6:'start',7:'due',8:'horizon',9:'priority',10:'status',11:'note',12:'technical',13:'adaptive',14:'createdAt',15:'updatedAt',16:'completedAt',17:'source'};
   const BOOL=new Set([7,8,12,22]);
   const workDate=/^\d{4}-\d{2}-\d{2}$/;
+  const READ_ONLY_SCOPE='https://www.googleapis.com/auth/spreadsheets.readonly';
+  const WRITE_SCOPE='https://www.googleapis.com/auth/spreadsheets';
+  function canAutoSync({enabled,approved,baseline,restoreGuard,blocked}){
+    return Boolean(enabled&&approved&&baseline&&!restoreGuard&&!blocked);
+  }
+  function isBlank(value){
+    return value===null||value===undefined||(typeof value==='string'&&value.trim()==='');
+  }
+  function reviewKey(field){return [field.kind,field.id,field.index].join('\u0001');}
+  function destructiveChanges(fields,choices){
+    return fields.flatMap(field=>{
+      const selected=choices[reviewKey(field)];
+      if(selected!=='device'&&selected!=='sheets')return [];
+      const selectedValue=selected==='device'?field.localValue:field.remoteValue;
+      const destinationValue=selected==='device'?field.remoteValue:field.localValue;
+      if(!isBlank(selectedValue)||isBlank(destinationValue))return [];
+      return [{field,selected,destinationValue}];
+    });
+  }
+  function confirmDestructiveChanges(changes,confirmFn){
+    if(!changes.length)return true;
+    const format=value=>value===null||value===undefined?'未設定'
+      :typeof value==='string'&&value.trim()===''?(value===''?'空欄':'空欄（空白文字のみ）'):String(value);
+    const details=changes.map(({field,selected,destinationValue},index)=>{
+      const record=field.kind==='work'?'ワーク記録':'アクション';
+      const date=field.kind==='work'?'日付：'+field.id:'アクションID：'+field.id;
+      const destination=selected==='device'?'Google Sheets':'端末';
+      return [
+        `${index+1}. ${record} / ${date} / ${field.label||field.key||'項目'}`,
+        `   端末の記録：${format(field.localValue)}`,
+        `   Google Sheetsの記録：${format(field.remoteValue)}`,
+        `   消去される場所と値：${destination}の「${format(destinationValue)}」`
+      ].join('\n');
+    }).join('\n\n');
+    return confirmFn(
+      `選択内容を反映すると、次の既存値${changes.length}件が消去されます。\n\n${details}\n\nこの値を消去して続けますか？`
+    )===true;
+  }
   function cell(v,isBool){
     if(isBool) return ['TRUE','true','1','yes','はい','済','達成'].includes(String(v??'').trim())?'TRUE':'FALSE';
     return String(v??'');
@@ -276,6 +314,6 @@ window.GoalWriteback=(function(){
       throw Error(stage+'で停止しました。確認できた処理は少なくとも'+changed+'項目です。Sheetsを再確認してから差分確認をやり直してください。'+error.message);
     }
   }
-  return {commit,load,baselineFromRows,differences,countPending,preview,applyRemoteField,workFields:WF,actionFields:AF,
-    workHeaders:WORK_HEADERS,actionHeaders:ACTION_HEADERS};
+  return {commit,load,baselineFromRows,differences,countPending,preview,applyRemoteField,destructiveChanges,confirmDestructiveChanges,canAutoSync,
+    readOnlyScope:READ_ONLY_SCOPE,writeScope:WRITE_SCOPE,workFields:WF,actionFields:AF,workHeaders:WORK_HEADERS,actionHeaders:ACTION_HEADERS};
 })();

@@ -406,7 +406,8 @@
     }
   }
   async function autoSyncTick(){
-    if(!autoSyncEnabled||!safeSyncApproved||!writeBaseline||backupRestoreSyncGuard||autoSyncBlocked||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy||document.hidden||Date.now()<autoRetryAfter)return;
+    if(!GoalWriteback.canAutoSync({enabled:autoSyncEnabled,approved:safeSyncApproved,baseline:writeBaseline,
+      restoreGuard:backupRestoreSyncGuard,blocked:autoSyncBlocked})||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy||document.hidden||Date.now()<autoRetryAfter)return;
     autoSyncTickBusy=true;
     try{
       if((!autoWriteToken||!googleToken||Date.now()>=autoTokenExpiresAt)&&cloudWorkerUrl&&cloudSession){
@@ -575,7 +576,7 @@
     try{
       const client=google.accounts.oauth2.initTokenClient({
         client_id:clientId,
-        scope:'https://www.googleapis.com/auth/spreadsheets',
+        scope:GoalWriteback.writeScope,
         callback:(response)=>{
           autoAuthBusy=false;
           if(!response?.access_token){
@@ -800,13 +801,8 @@
     const fields=syncReview.groups.flatMap(group=>group.values);
     const pending=fields.filter(field=>!syncReviewChoices[reviewKey(field)]||syncReviewChoices[reviewKey(field)]==='defer');
     if(pending.length){syncStatusMessage('未選択の差分が'+pending.length+'件あります。「端末」「Google Sheets」「今は決めない」から選んでください');return;}
-    const destructive=fields.filter(field=>{
-      const selected=syncReviewChoices[reviewKey(field)];
-      const selectedValue=selected==='device'?field.localValue:field.remoteValue;
-      const destinationValue=selected==='device'?field.remoteValue:field.localValue;
-      return selectedValue===''&&destinationValue!==null&&destinationValue!=='';
-    });
-    if(destructive.length&&!confirm('選択した内容を反映すると、既存の値を空欄にする項目が'+destructive.length+'件あります。空欄化する項目を確認し、明示的に続けますか？'))return;
+    const destructive=GoalWriteback.destructiveChanges(fields,syncReviewChoices);
+    if(!GoalWriteback.confirmDestructiveChanges(destructive,confirm))return;
     if(JSON.stringify(data)!==syncReview.localSnapshot){
       syncReview=null;syncReviewChoices={};render();
       syncStatusMessage('差分確認後に端末の記録が変更されました。もう一度差分を確認してください');
@@ -827,7 +823,7 @@
       try{
         const client=google.accounts.oauth2.initTokenClient({
           client_id:txt(syncConfig.clientId||DEFAULT_OAUTH_CLIENT_ID),
-          scope:'https://www.googleapis.com/auth/spreadsheets',
+          scope:GoalWriteback.writeScope,
           callback:response=>{
             syncAuthBusy=false;
             if(!response?.access_token){syncStatusMessage('書き込み許可が得られませんでした。Sheetsは変更していません');return;}
@@ -924,12 +920,12 @@
     if(!/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(id)){syncStatusMessage('共通のOAuthクライアントIDが未設定です。設定するまでは既存のIDを入力してください');return;}
     if(location.protocol==='file:'){syncStatusMessage('Google認証は file:// では利用できません。HTTPSでアプリを開いてください');return;}
     if(!window.google?.accounts?.oauth2){syncStatusMessage('Google認証ライブラリを読み込めません。ネット接続とブロック設定を確認してください');return;}
-    if(googleToken){fetchSheetRows();return;}
+    if(googleToken&&(!googleTokenWritable||autoSyncEnabled)){fetchSheetRows();return;}
     try{
       syncAuthBusy=true;
       const client=google.accounts.oauth2.initTokenClient({
         client_id:id,
-        scope:'https://www.googleapis.com/auth/spreadsheets',
+        scope:GoalWriteback.readOnlyScope,
         callback:(response)=>{syncAuthBusy=false;if(!response?.access_token){syncStatusMessage('Googleアカウントの許可が得られませんでした');return;}googleToken=response.access_token;googleTokenWritable=false;fetchSheetRows();},
         error_callback:(error)=>{syncAuthBusy=false;syncStatusMessage('Google認証を完了できませんでした：'+(error?.type||'unknown'));}
       });

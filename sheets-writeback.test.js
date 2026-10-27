@@ -5,6 +5,51 @@ globalThis.window=globalThis;
 require('./sheets-writeback.js');
 const sync=globalThis.GoalWriteback;
 
+test('read-only review scope is separate from scopes that can write',()=>{
+  assert.equal(sync.readOnlyScope,'https://www.googleapis.com/auth/spreadsheets.readonly');
+  assert.equal(sync.writeScope,'https://www.googleapis.com/auth/spreadsheets');
+  assert.notEqual(sync.readOnlyScope,sync.writeScope);
+});
+
+test('clearing existing device values from null, undefined, or blank Sheets values requires explicit confirmation',()=>{
+  const fields=[null,undefined,'','   '].map((remoteValue,index)=>({
+    kind:'work',id:'2026-10-27',index:index+1,label:'大切な記録'+(index+1),
+    localValue:'端末に残す値'+(index+1),remoteValue
+  }));
+  const choices=Object.fromEntries(fields.map(field=>[
+    [field.kind,field.id,field.index].join('\u0001'),'sheets'
+  ]));
+  const changes=sync.destructiveChanges(fields,choices);
+  assert.equal(changes.length,4);
+  let prompt='';
+  assert.equal(sync.confirmDestructiveChanges(changes,message=>{prompt=message;return true;}),true);
+  assert.match(prompt,/端末に残す値1/);
+  assert.match(prompt,/Google Sheetsの記録：未設定/);
+  assert.match(prompt,/Google Sheetsの記録：空欄/);
+  assert.match(prompt,/Google Sheetsの記録：空欄（空白文字のみ）/);
+  assert.match(prompt,/消去される場所と値：端末/);
+});
+
+test('canceling deletion confirmation leaves device data and baseline untouched and performs no Sheets write',()=>{
+  const fields=[{kind:'work',id:'2026-10-27',index:1,label:'理由',localValue:'端末の理由',remoteValue:null}];
+  const choices={['work\u00012026-10-27\u00011']:'sheets'};
+  const data={entries:{'2026-10-27':{fit:'端末の理由'}},progress:{actions:[]}};
+  const baseline={version:1,work:{'2026-10-27':['2026-10-27','以前の理由']},actions:{}};
+  const beforeData=JSON.stringify(data),beforeBaseline=JSON.stringify(baseline);
+  let writes=0;
+  const confirmed=sync.confirmDestructiveChanges(sync.destructiveChanges(fields,choices),()=>false);
+  if(confirmed)writes++;
+  assert.equal(confirmed,false);
+  assert.equal(writes,0);
+  assert.equal(JSON.stringify(data),beforeData);
+  assert.equal(JSON.stringify(baseline),beforeBaseline);
+});
+
+test('automatic sync remains stopped immediately after backup restore even when previously approved',()=>{
+  assert.equal(sync.canAutoSync({enabled:true,approved:true,baseline:{version:1},restoreGuard:true,blocked:false}),false);
+  assert.equal(sync.canAutoSync({enabled:true,approved:true,baseline:{version:1},restoreGuard:false,blocked:false}),true);
+});
+
 function row(headers,values={}){
   const result=Array(headers.length).fill('');
   for(const [index,value] of Object.entries(values))result[Number(index)]=value;
@@ -70,6 +115,22 @@ test('choosing Sheets values only updates the provided staged data',()=>{
   assert.equal(action.progress.actions[0].title,'Sheetsの行動');
 });
 
+test('applying a reviewed work value retains other work, goals, actions, and history',()=>{
+  const action={id:'a-1',title:'端末のアクション'};
+  const history={id:'h-1',reason:'端末の履歴'};
+  const goal={id:'g-1',title:'端末のゴール'};
+  const goalHistory={id:'gh-1',title:'ゴール変更履歴'};
+  const staged={entries:{'2026-10-27':{fit:'選択対象',achievement:'別のワーク記録'}},
+    goals:[goal],goalHistory:[goalHistory],progress:{actions:[action],actionHistory:[history]}};
+  sync.applyRemoteField(staged,'work','2026-10-27',1,'Sheetsから選んだ値');
+  assert.equal(staged.entries['2026-10-27'].fit,'Sheetsから選んだ値');
+  assert.equal(staged.entries['2026-10-27'].achievement,'別のワーク記録');
+  assert.equal(staged.goals[0],goal);
+  assert.equal(staged.goalHistory[0],goalHistory);
+  assert.equal(staged.progress.actions[0],action);
+  assert.equal(staged.progress.actionHistory[0],history);
+});
+
 test('commit stops before any write when Sheets changed after preview',async()=>{
   const originalFetch=globalThis.fetch;
   const observedWork=[sync.workHeaders,row(sync.workHeaders,{0:'2026-10-27',1:'プレビュー時'})];
@@ -89,6 +150,28 @@ test('commit stops before any write when Sheets changed after preview',async()=>
       baseline:sync.baselineFromRows(observedWork,[sync.actionHeaders]),
       expectedRows:{workRows:observedWork,actionRows:[sync.actionHeaders]}
     }),/差分確認後にGoogle Sheetsの内容が変わりました/);
+    assert.equal(writes,0);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('commit stops without writing when both device and Sheets changed the same value',async()=>{
+  const originalFetch=globalThis.fetch;
+  const baselineWork=[sync.workHeaders,row(sync.workHeaders,{0:'2026-10-27',1:'前回'})];
+  const changedWork=[sync.workHeaders,row(sync.workHeaders,{0:'2026-10-27',1:'Sheets側の変更'})];
+  let writes=0;
+  globalThis.fetch=async (url,options={})=>{
+    const target=decodeURIComponent(String(url));
+    if(options.method==='POST'){writes++;return Response.json({updatedCells:1});}
+    if(target.includes('ワーク記録'))return Response.json({values:changedWork});
+    if(target.includes('アクション一覧'))return Response.json({values:[sync.actionHeaders]});
+    throw Error('Unexpected mocked URL: '+url);
+  };
+  try{
+    await assert.rejects(sync.commit({
+      sheetId:'c'.repeat(24),token:'mock-token',
+      data:{entries:{'2026-10-27':{fit:'端末側の変更'}},progress:{actions:[]}},
+      baseline:sync.baselineFromRows(baselineWork,[sync.actionHeaders])
+    }),/変更が重複しています/);
     assert.equal(writes,0);
   }finally{globalThis.fetch=originalFetch;}
 });
