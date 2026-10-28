@@ -8,6 +8,8 @@ on:
       - 'cloud-auth.test.js'
       - 'sheets-writeback.js'
       - 'sheets-writeback.test.js'
+      - 'goal-management-sync.js'
+      - 'goal-management-sync.test.js'
       - 'goal-progress.js'
       - 'goal-progress.test.js'
       - 'README.md'
@@ -19,6 +21,12 @@ on:
       - 'index.html'
       - 'cloud-auth.js'
       - 'cloud-auth.test.js'
+      - 'sheets-writeback.js'
+      - 'sheets-writeback.test.js'
+      - 'goal-management-sync.js'
+      - 'goal-management-sync.test.js'
+      - 'goal-progress.js'
+      - 'goal-progress.test.js'
       - 'README.md'
       - '.github/workflows/cloudflare-auth-tests.yml'
 jobs:
@@ -30,7 +38,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test OAuth and synchronization safety
-        run: node --test worker/auth.test.js sheets-writeback.test.js goal-progress.test.js cloud-auth.test.js
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -40,6 +48,7 @@ jobs:
           if(!inline)throw Error('Inline script not found');
           new Function(inline[1]);
           new Function(fs.readFileSync('sheets-writeback.js','utf8'));
+          new Function(fs.readFileSync('goal-management-sync.js','utf8'));
           new Function(fs.readFileSync('goal-progress.js','utf8'));
           new Function(fs.readFileSync('cloud-auth.js','utf8'));
           console.log('index.html JavaScript syntax OK');
