@@ -1,7 +1,7 @@
 /* Goal Tassei Kun: actions and weekly reflection, browser-local data. */
 window.GoalProgress = (function () {
   'use strict';
-  var mode = 'plan', editing = '', selectedWeek = '', selectedGoal = '', prefillIdea = null;
+  var mode = 'actions', editing = '', selectedWeek = '', selectedGoal = '', prefillIdea = null;
   var STATUSES = ['未着手','進行中','完了','保留'];
   function text(v, max) { return typeof v === 'string' ? v.slice(0, max || 4000) : ''; }
   function html(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
@@ -120,9 +120,9 @@ window.GoalProgress = (function () {
     fields+=area('成果指標・完了条件','expected',a.expected||'','何をもって完了とする？');fields+=area('進捗・実際にできたこと','note',a.note||'','結果や次に必要なことを追記しよう');
     fields+='<details class="pg-details"><summary>現状と課題も記録する</summary>'+area('事実・現在地','facts',a.facts||'')+area('GOALとのGAP','gap',a.gap||'')+area('技術課題（知識・方法・仕組み）','technical',a.technical||'')+area('適応課題（習慣・向き合い方・選択）','adaptive',a.adaptive||'')+'</details>';
     if(a.id) fields+=input('変更理由（変更履歴に記録）','reason','','text');
-    return '<section class="form-panel" id="pg-action-form"><div class="panelh"><h3>'+(a.id?'アクションを編集':'新しいアクションを登録')+'</h3><span class="chip blue">自分でコントロールできる一歩</span></div>'+
+    return '<details class="panel ui-group"'+(a.id||prefillIdea?' open':'')+'><summary>'+(a.id?'アクションを編集':'＋ 新しいアクションを登録')+'</summary><section class="ui-body" id="pg-action-form">'+
       '<p class="smallmuted">ゴールに関連付けられます。新しいゴールをGoogle Sheetsから同期した後でも選択可能です。</p>'+fields+
-      '<div class="foot-actions">'+button(a.id?'変更を保存':'アクションを追加','save-action','','dark')+(a.id?button('編集をやめる','cancel-edit'):'')+'</div></section>';
+      '<div class="foot-actions">'+button(a.id?'変更を保存':'アクションを追加','save-action','','dark')+(a.id?button('編集をやめる','cancel-edit'):'')+'</div></section></details>';
   }
   function renderActions(ctx) {
     var data=ctx.data,p=data.progress,active=actionList(data).filter(function(a){return a.status!=='完了';});
@@ -132,9 +132,15 @@ window.GoalProgress = (function () {
     result+=renderActionForm(data);
     result+='<section class="form-panel"><div class="panelh"><h3>アクション一覧</h3><span class="chip gray">'+cards.length+'件</span></div>';
     if(!cards.length)result+='<p class="empty">最初のアクションを登録しよう。売上や相手の返事ではなく、あなた自身が実行できる行動を設定してね。</p>';
-    cards.forEach(function(a){
+    ['進行中','未着手','保留','完了','その他'].forEach(function(status){
+      var bucket=cards.filter(a=>(STATUSES.includes(a.status)?a.status:'その他')===status);
+      if(!bucket.length)return;
+      result+='<details class="ui-group"'+(status==='進行中'||status==='未着手'?' open':'')+'><summary>'+html(status)+'<span class="chip gray">'+bucket.length+'件</span></summary><div class="ui-body">';
+      [...new Set(bucket.map(a=>a.theme||'テーマ未設定'))].sort((a,b)=>a.localeCompare(b,'ja')).forEach(function(theme){
+      result+='<h4 class="ui-theme">'+html(theme)+'</h4>';
+      bucket.filter(a=>(a.theme||'テーマ未設定')===theme).forEach(function(a){
       var g=itemGoal(data.goals||[],a.goalId);
-      result+='<article class="pg-action-card"><div class="pg-card-title"><strong>'+html(a.title)+'</strong><span class="chip '+(a.status==='完了'?'':'gray')+'">'+html(a.status)+'</span></div>';
+      result+='<details class="pg-action-card ui-item"><summary><span><strong>'+html(a.title)+'</strong><small>期限：'+html(a.due||'未設定')+' ・ 優先度：'+html(a.priority||'通常')+'</small></span></summary><div class="ui-body">';
       if(g)result+='<div class="smallmuted">🎯 '+html(goalName(g))+'</div>';
       else if(a.goalId)result+='<div class="smallmuted">関連ゴール：次回のGoogle同期で再確認</div>';
       if(a.minimum)result+='<p class="pg-mini"><b>最低限の完了ライン：</b>'+html(a.minimum)+'</p>';
@@ -143,9 +149,12 @@ window.GoalProgress = (function () {
         button('編集','edit','data-id="'+html(a.id)+'"')+
         button(a.status==='完了'?'未着手に戻す':'完了にする','toggle','data-id="'+html(a.id)+'"','secondary')+
         button('今日のワークに使う →','today','data-id="'+html(a.id)+'"','dark')+
-        '</div></article>';
+        '</div></div></details>';
+      });
+      });
+      result+='</div></details>';
     });
-    result+='</section></div>';return result;
+    result+='</section>';return result;
   }
   function selectedReview(data) {
     var week=selectedWeek||weekMonday(today());
@@ -197,7 +206,7 @@ window.GoalProgress = (function () {
     var e=(d.entries||{})[today()]||{}, next = e.valuableAction || e.minimumAction;
     return '<div class="topline"><div><div class="eyebrow">GOAL → GAP → ACTION</div><h1 class="heading">アクションと週次レビュー</h1><p class="subtitle">グループセッションが終わっても、自分で行動を続ける仕組み。</p></div></div>'+
       '<div class="pg-today"><div><b>今日の最重要アクション</b><p>'+html(next||'朝のワークで今日の一歩を決めよう')+'</p></div>'+button('朝のワークへ →','open-morning','','secondary')+'</div>'+
-      '<div class="goal-filter-bar">'+[['plan','今週・将来'],['actions','アクション'],['review','週次レビュー'],['history','変更履歴']].map(function(x){return '<button type="button" class="'+(mode===x[0]?'active':'')+'" data-progress-action="mode" data-mode="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</div>'+
+      '<div class="goal-filter-bar">'+[['actions','行動を探す・登録'],['plan','今週・これから'],['review','週次レビュー'],['history','変更履歴']].map(function(x){return '<button type="button" class="'+(mode===x[0]?'active':'')+'" data-progress-action="mode" data-mode="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</div>'+
       (mode==='plan'?renderPlan(ctx):mode==='actions'?renderActions(ctx):mode==='review'?renderReview(ctx):renderHistory(d));
   }
   function values(form,names) {

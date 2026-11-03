@@ -25,3 +25,20 @@ test('sync notice distinguishes offline and disabled states without a Sheets req
  vm.createContext(c);vm.runInContext(source('updateAutoSyncNotice'),c);c.updateAutoSyncNotice();assert.equal(el.hidden,false);assert.match(el.innerHTML,/自動同期オフ/);
  Object.assign(c,{autoSyncEnabled:true,autoWriteToken:true,autoTokenExpiresAt:Date.now()+60000,googleToken:'test',autoPending:()=>1,autoSyncBlocked:false,autoAuthBusy:false,navigator:{onLine:false}});c.updateAutoSyncNotice();assert.match(el.innerHTML,/オフライン/);assert.match(el.innerHTML,/ゴールはGoogle連携で手動同期/);
 });
+
+test('growth history groups months and keeps each day closed with original navigation',()=>{
+ const c={data:{entries:{'2026-11-03':{growth:'<成長>',valuableAction:'新しい行動'},'2026-10-29':{achievement:'できたこと'}},lessons:[]},txt:x=>String(x??'').trim(),hasMorning:e=>!!e.valuableAction,header:()=>'',esc:x=>String(x).replaceAll('<','&lt;').replaceAll('>','&gt;'),formatDate:d=>d,statusTag:()=>'<span>記録済み</span>'};
+ vm.createContext(c);vm.runInContext(source('renderHistory'),c);const before=JSON.stringify(c.data);const out=c.renderHistory();
+ assert.match(out,/2026年11月/);assert.match(out,/2026年10月/);
+ assert.equal((out.match(/class="ui-item"/g)||[]).length,2);
+ assert.match(out,/data-date="2026-11-03"/);assert.match(out,/data-review-date="2026-11-03"/);
+ assert.match(out,/&lt;成長&gt;/);assert.equal(JSON.stringify(c.data),before);
+});
+
+test('goal overview puts current goals before ideas and preserves period filters and editors',()=>{
+ const c={data:{goals:[{id:'g1',period:'1か月',theme:'仕事',qualitative:'<目標>',why:'理由',status:'進行中'}],goalHistory:[],goalChecks:[]},GOAL_PERIODS:['1か月','3か月','1年','3年','5年'],goalPeriodFilter:'all',goalThemeFilter:'all',syncConfig:{sheetId:''},header:()=>'',esc:x=>String(x).replaceAll('<','&lt;').replaceAll('>','&gt;'),renderGoalEditor:g=>'<div data-editor="'+(g?g.id:'new')+'"></div>',renderGoalIdeas:()=>'<div>ゴールの種</div>',goalField:()=>'',button:()=>''};
+ vm.createContext(c);vm.runInContext(source('renderGoal'),c);const out=c.renderGoal();
+ assert.ok(out.indexOf('現在のゴール')<out.indexOf('会話から育てる'));
+ assert.match(out,/<details class="goal-card ui-item"><summary>/);assert.match(out,/&lt;目標&gt;/);
+ assert.match(out,/data-editor="g1"/);assert.match(out,/data-goal-filter="3か月"/);
+});

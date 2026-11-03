@@ -284,11 +284,18 @@
     <label class="checkbox-line"><input type="checkbox" data-check="minimumDone" ${e.minimumDone?'checked':''}><span><strong>最低限の完了ラインを達成した</strong><small>小さくても、行動できた自分を認めよう。</small></span></label><label class="checkbox-line"><input type="checkbox" data-check="valuableDone" ${e.valuableDone?'checked':''}><span><strong>一番価値のある行動を実行した</strong><small>完璧な成果でなくても「実行した」ならチェック。</small></span></label></section>
     <section class="form-panel"><div class="form-heading"><div class="stepno">✦</div><div><h3>昨日までの自分との差分</h3><p>結果だけでなく、行動と思考の変化を記録する。</p></div></div>${field('achievement','今日、実際に何ができた？','例：動く試作版を完成させて、操作してもらった。')}${field('growth','以前の自分にはできなかったことで、今日できたことは？','例：完璧を目指す前に、まず人に使ってもらえた。','小さな変化も、未来の自分を信じる根拠になる。')}${field('tomorrow','明日の自分に渡したい、次の一歩は？','例：使いにくかった点を1つ直す。', '',2)}<div class="foot-actions">${button(e.reviewed?'振り返りを更新する ✓':'今日の振り返りを完了','finish-review','dark')}${button('成長の記録を見る →','go-history','outline')}<span class="status-note">記録は自動保存されます。</span></div></section></div>`;
   }
-  function renderHistory(){let dates=Object.keys(data.entries).filter(d=>hasMorning(data.entries[d])||data.entries[d].reviewed||data.entries[d].minimumDone||txt(data.entries[d].growth)||txt(data.entries[d].achievement)||data.entries[d].lessonReviewed||txt(data.entries[d].lessonReflection)||txt(data.entries[d].lessonNextStep)).sort().reverse();let notes=dates.filter(d=>txt(data.entries[d].growth));let total=dates.length;let done=dates.filter(d=>data.entries[d].minimumDone).length;let learned=Object.values(data.entries).filter(e=>e.lessonReviewed).length;
-    return header('成長の記録','連続日数よりも、「前の自分との差分」を大切に。')+`<div class="stack"><section class="panel"><div class="panelh"><h3>これまでの積み重ね</h3></div><div class="metrics"><div class="metric"><div class="metric-value">${total}</div><div class="metric-label">記録した日</div></div><div class="metric"><div class="metric-value">${done}</div><div class="metric-label">小さな一歩を達成</div></div><div class="metric"><div class="metric-value">${notes.length}</div><div class="metric-label">成長の差分を発見</div></div></div></section>
-    <section class="panel"><div class="panelh"><h3>復習の積み重ね</h3><span class="chip">${learned}日分</span></div><p class="smallmuted">読んで終わりにせず、復習した日を数えています。</p></section><section class="panel"><div class="panelh"><h3>講義の復習履歴</h3></div>${Object.keys(data.entries).filter(d=>data.entries[d].lessonReviewed||Object.values(data.entries[d].lessonNotes||{}).some(n=>n.reviewed)).sort().reverse().slice(0,12).map(d=>{const e=data.entries[d],l=data.lessons.find(l=>l.id===e.lessonId);return `<button type="button" class="history-item" data-review-date="${esc(d)}"><span><span class="history-date">${esc(formatDate(d,{year:true}))}</span><h4>${esc(l?.title||e.lessonTitle||'講義の学び')}</h4><p>${esc(e.lessonReflection||e.lessonNextStep||'復習した学びを見直す')}</p></span><span aria-hidden="true">›</span></button>`;}).join('')||'<p class="empty">今日の振り返りで講義の学びを1つ復習すると、ここに残ります。</p>'}</section>
-    <section class="panel"><div class="panelh"><h3>「できるようになった」コレクション</h3></div>${notes.length?`<div class="note-list">${notes.slice(0,10).map(d=>`<div class="note-item"><div class="note-date">${esc(formatDate(d,{year:true}))}</div>${esc(data.entries[d].growth)}</div>`).join('')}</div>`:'<p class="empty">まだ記録がありません。夜の振り返りで、成長の差分を書いてみよう。</p>'}</section>
-    <section class="panel"><div class="panelh"><h3>日ごとの記録</h3><span class="smallmuted">新しい順</span></div>${dates.length?dates.map(d=>{let e=data.entries[d];return `<button class="history-item" type="button" data-date="${d}"><span><span class="history-date">${esc(formatDate(d,{year:true,weekday:true}))}</span><h4>${esc(e.valuableAction||'今日の記録')}</h4><p>${esc(e.growth||e.achievement||e.minimumAction||'記録を開いて続きを書こう')}</p></span><span class="right">${statusTag(e)}<span aria-hidden="true">›</span></span></button>`}).join(''):'<p class="empty">朝のワークから、最初の1日を記録しよう。</p>'}</section></div>`;
+  function renderHistory(){
+    const dates=Object.keys(data.entries).filter(d=>hasMorning(data.entries[d])||data.entries[d].reviewed||data.entries[d].minimumDone||txt(data.entries[d].growth)||txt(data.entries[d].achievement)||data.entries[d].lessonReviewed||txt(data.entries[d].lessonReflection)||txt(data.entries[d].lessonNextStep)).sort().reverse();
+    const notes=dates.filter(d=>txt(data.entries[d].growth));
+    const lessons=dates.filter(d=>data.entries[d].lessonReviewed||Object.values(data.entries[d].lessonNotes||{}).some(n=>n.reviewed));
+    const months=[...new Set(dates.map(d=>d.slice(0,7)))];
+    let out=header('成長の記録','まず月を選び、読みたい日の記録を開こう。')+'<div class="stack"><section class="panel"><h3>これまでの積み重ね</h3><div class="metrics">'+[[dates.length,'記録した日'],[dates.filter(d=>data.entries[d].minimumDone).length,'小さな一歩を達成'],[notes.length,'成長の差分']].map(([n,label])=>'<div class="metric"><div class="metric-value">'+n+'</div><div class="metric-label">'+label+'</div></div>').join('')+'</div></section><section class="panel"><h3>日ごとの記録</h3><p class="smallmuted">月 → 日の順に開くと、行動・成長・次の一歩を確認できます。</p>';
+    for(const month of months){const days=dates.filter(d=>d.startsWith(month));out+='<details class="ui-group"'+(month===months[0]?' open':'')+'><summary>'+esc(month.replace('-','年')+'月')+'<span class="chip gray">'+days.length+'日</span></summary><div class="ui-body">';
+      for(const d of days){const e=data.entries[d];out+='<details class="ui-item"><summary><span><small>'+esc(formatDate(d,{weekday:true}))+'</small><strong>'+esc(e.valuableAction||e.achievement||'この日の記録')+'</strong></span>'+statusTag(e)+'</summary><div class="ui-body">'+[['取り組んだ行動',e.valuableAction||e.minimumAction],['できたこと',e.achievement],['以前の自分との差分',e.growth],['明日の一歩',e.tomorrow]].map(([label,value])=>'<h4>'+label+'</h4><p>'+esc(value||'未記入')+'</p>').join('')+'<div class="foot-actions"><button class="button outline" data-date="'+d+'">朝の記録を開く</button><button class="button secondary" data-review-date="'+d+'">夜の記録を開く</button></div></div></details>';}
+      out+='</div></details>';}
+    if(!dates.length)out+='<p class="empty">まだ記録がありません。朝のワークから最初の一歩を残そう。</p>';
+    out+='</section><details class="panel ui-group"><summary>成長のコレクション<span class="chip">'+notes.length+'件</span></summary><div class="ui-body">'+(notes.map(d=>'<div class="note-item"><div class="note-date">'+esc(formatDate(d,{year:true}))+'</div>'+esc(data.entries[d].growth)+'</div>').join('')||'<p class="empty">夜の振り返りに書いた成長の差分が集まります。</p>')+'</div></details><details class="panel ui-group"><summary>講義の復習<span class="chip gray">'+lessons.length+'日</span></summary><div class="ui-body">'+(lessons.map(d=>'<button type="button" class="history-item" data-review-date="'+d+'"><span>'+esc(formatDate(d,{year:true}))+'<strong>'+esc(data.entries[d].lessonTitle||'講義の学び')+'</strong></span><span aria-hidden="true">›</span></button>').join('')||'<p class="empty">復習を記録するとここに表示されます。</p>')+'</div></details></div>';
+    return out;
   }
   function renderGoal(){
     const source=Array.isArray(data.goals)?data.goals:[],history=Array.isArray(data.goalHistory)?data.goalHistory:[],checks=Array.isArray(data.goalChecks)?data.goalChecks:[];
@@ -296,7 +303,7 @@
     const visible=active.filter(g=>(goalPeriodFilter==='all'||g.period===goalPeriodFilter)&&(goalThemeFilter==='all'||g.theme===goalThemeFilter));
     const link=/^[A-Za-z0-9_-]{20,}$/.test(syncConfig.sheetId)?'https://docs.google.com/spreadsheets/d/'+encodeURIComponent(syncConfig.sheetId)+'/edit':'';
     let out=header('ゴール設定｜未来の自分を定義する','期間 × テーマ × 定性・定量で整理。変更がなければそのまま、気づいたときに更新。');
-    out+='<div class="stack">'+renderGoalIdeas()+'<section class="form-panel"><div class="panelh"><h3>現在のゴール</h3><span class="chip">Google Sheetsと連携</span></div>';
+    out+='<div class="stack"><section class="form-panel"><div class="panelh"><h3>現在のゴール</h3><span class="chip">Google Sheetsと連携</span></div>';
     out+='<div class="goal-top-stats"><div class="goal-stat"><strong>'+active.length+'</strong><span>登録中のゴール</span></div><div class="goal-stat"><strong>'+new Set(active.map(g=>g.theme)).size+'</strong><span>テーマ数</span></div><div class="goal-stat"><strong>'+history.length+'</strong><span>履歴の件数</span></div></div>';
     out+='<p class="muted-text">ゴールをこの画面で登録・編集すると、端末に保存され、変更前後の内容が履歴に残ります。Google Sheetsとの同期は「Google連携」で差分を確認してから手動で行います。</p>';
     out+=renderGoalEditor();
@@ -310,19 +317,19 @@
     for(const period of GOAL_PERIODS){
       const list=visible.filter(g=>g.period===period);
       if(!list.length)continue;
-      out+='<div class="goal-period"><h3>🗓 '+esc(period)+' <small>'+list.length+'件</small></h3><div class="goal-card-grid">';
+      out+='<details class="ui-group goal-period" open><summary>🗓 '+esc(period)+'<span class="chip gray">'+list.length+'件</span></summary><div class="goal-card-grid ui-body">';
       for(const g of list){
-        out+='<article class="goal-card"><div class="goal-card-top"><span class="title">'+esc(g.theme||'テーマ未設定')+'</span><span class="'+(g.status==='達成'?'chip':'chip gray')+'">'+esc(g.status||'進行中')+'</span></div>';
+        out+='<details class="goal-card ui-item"><summary><span><small>'+esc(g.theme||'テーマ未設定')+'</small><strong>'+esc(g.qualitative||g.quantitative||'内容未設定')+'</strong><small>期限：'+esc(g.deadline||'未設定')+'</small></span><span class="chip gray">'+esc(g.status||'進行中')+'</span></summary><div class="ui-body">';
         out+='<h4>🌱 定性ゴール</h4><p class="'+(!g.qualitative?'subtle':'')+'">'+esc(g.qualitative||'未設定')+'</p>';
         out+='<h4>📊 定量ゴール</h4><p class="'+(!g.quantitative?'subtle':'')+'">'+esc(g.quantitative?(g.quantitative+(g.unit?' '+g.unit:'')):'未設定')+'</p>';
         if(g.scene)out+='<h4>🌅 未来の景色</h4><p>'+esc(g.scene)+'</p>';
         if(g.be)out+='<h4>✨ 在り方（BE）</h4><p>'+esc(g.be)+'</p>';
         if(g.why)out+='<h4>💭 ゴールの理由</h4><p>'+esc(g.why)+'</p>';
-        out+='<div class="fine">期限：'+esc(g.deadline||'未設定')+' ・ 最終更新：'+esc(g.updated||'—')+' ・ 最終確認：'+esc(g.checked||'—')+'</div>'+renderGoalEditor(g)+'</article>';
+        out+='<div class="fine">期限：'+esc(g.deadline||'未設定')+' ・ 最終更新：'+esc(g.updated||'—')+' ・ 最終確認：'+esc(g.checked||'—')+'</div>'+renderGoalEditor(g)+'</div></details>';
       }
-      out+='</div></div>';
+      out+='</div></details>';
     }
-    out+='</section><section class="form-panel"><div class="panelh"><h3>変更履歴</h3><span class="chip gray">'+history.length+'件</span></div>';
+    out+='</section><details class="panel ui-group"><summary>会話から育てるゴールの種</summary><div class="ui-body">'+renderGoalIdeas()+'</div></details><section class="form-panel"><div class="panelh"><h3>変更履歴</h3><span class="chip gray">'+history.length+'件</span></div>';
     out+='<p class="muted-text">変更のたびに、当時の定性・定量ゴールや期限、未来の景色を記録します。履歴は上書きせず、新しいバージョンとして追加します。</p>';
     const filtered=history.filter(h=>(goalPeriodFilter==='all'||h.period===goalPeriodFilter)&&(goalThemeFilter==='all'||h.theme===goalThemeFilter)).slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
     if(!filtered.length)out+='<p class="empty">まだ変更履歴はありません。最初のゴール登録から履歴を残していこう。</p>';
@@ -1382,7 +1389,18 @@
   }
   function progressCtx(){return {data:data,save:()=>{const ok=save();if(ok)scheduleAutoSave();return ok;},render:render,go:go,toast:showToast,toMorning:copyProgressToMorning};}
   function copyProgressToMorning(title,minimum,actionId,goalId){const e=entry(jstToday());if((txt(e.valuableAction)&&e.valuableAction!==title)||(txt(e.minimumAction)&&e.minimumAction!==minimum)){if(!confirm('今日の行動計画を上書きします。よろしいですか？'))return;}e.valuableAction=title;e.minimumAction=minimum||title;e.linkedActionId=actionId||'';const g=(data.goals||[]).find(x=>x.id===goalId);if(g)e.goalSnapshot=goalHeadline(g);if(!save()){showToast('端末への保存に失敗しました');return;}go('morning');showToast('今日のワークにセットしたよ');}
-  function render(){if(autoSilentSync&&editingControlFocused()){autoRenderDeferred=true;return;}const app=document.getElementById('app');let content={home:renderHome,morning:renderMorning,evening:renderEvening,history:renderHistory,goal:renderGoal,progress:()=>GoalProgress.render(progressCtx()),sync:renderSync}[tab]();app.innerHTML=content;document.querySelectorAll('[data-nav]').forEach(b=>{let yes=b.dataset.nav===tab;b.classList.toggle('active',yes);b.setAttribute('aria-current',yes?'page':'false')});document.title=names[tab]+'｜未来の自分';updateAutoSyncNotice();}
+  function groupSecondaryPanels(app){
+    app.querySelectorAll('section.form-panel').forEach(section=>{
+      const title=section.querySelector('.panelh h3');
+      if(!title||!(/変更履歴|定期確認|過去の週次|期限を過ぎた|週間計画|これからの|アクションの種/.test(title.textContent)))return;
+      const heading=title.closest('.panelh'),fold=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div');
+      fold.className='panel ui-group';body.className='ui-body';summary.textContent=title.textContent;
+      const count=heading.querySelector('.chip');if(count)summary.append(count.cloneNode(true));
+      heading.remove();while(section.firstChild)body.append(section.firstChild);
+      fold.append(summary,body);section.replaceWith(fold);
+    });
+  }
+  function render(){if(autoSilentSync&&editingControlFocused()){autoRenderDeferred=true;return;}const app=document.getElementById('app');let content={home:renderHome,morning:renderMorning,evening:renderEvening,history:renderHistory,goal:renderGoal,progress:()=>GoalProgress.render(progressCtx()),sync:renderSync}[tab]();app.innerHTML=content;if(tab==='goal'||tab==='progress')groupSecondaryPanels(app);document.querySelectorAll('[data-nav]').forEach(b=>{let yes=b.dataset.nav===tab;b.classList.toggle('active',yes);b.setAttribute('aria-current',yes?'page':'false')});document.title=names[tab]+'｜未来の自分';updateAutoSyncNotice();}
   function go(to,date=null){followToday=!date||date===jstToday();observedToday=jstToday();if(date)activeDate=date;else if(to==='home'||to==='morning'||to==='evening')activeDate=jstToday();tab=to;render();scrollTo({top:0,behavior:'instant'});}
   function showToast(message){if(autoSilentSync&&/同期しました|取り込みました/.test(message))return;const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2800)}
   function exportData(){const json=JSON.stringify({...data,exportedAt:new Date().toISOString()},null,2);const blob=new Blob([json],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`mirai-goal-backup-${jstToday()}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast('バックアップをダウンロードしました。')}
