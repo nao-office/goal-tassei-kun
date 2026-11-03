@@ -6,6 +6,7 @@ on:
       - 'index.html'
       - 'cloud-auth.js'
       - 'cloud-auth.test.js'
+      - 'daily-flow.test.js'
       - 'sheets-writeback.js'
       - 'sheets-writeback.test.js'
       - 'goal-management-sync.js'
@@ -21,6 +22,7 @@ on:
       - 'index.html'
       - 'cloud-auth.js'
       - 'cloud-auth.test.js'
+      - 'daily-flow.test.js'
       - 'sheets-writeback.js'
       - 'sheets-writeback.test.js'
       - 'goal-management-sync.js'
@@ -38,7 +40,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test OAuth and synchronization safety
-        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -53,3 +55,4 @@ jobs:
           new Function(fs.readFileSync('cloud-auth.js','utf8'));
           console.log('index.html JavaScript syntax OK');
           NODE
+
