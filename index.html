@@ -297,41 +297,58 @@
     out+='</section><details class="panel ui-group"><summary>成長のコレクション<span class="chip">'+notes.length+'件</span></summary><div class="ui-body">'+(notes.map(d=>'<div class="note-item"><div class="note-date">'+esc(formatDate(d,{year:true}))+'</div>'+esc(data.entries[d].growth)+'</div>').join('')||'<p class="empty">夜の振り返りに書いた成長の差分が集まります。</p>')+'</div></details><details class="panel ui-group"><summary>講義の復習<span class="chip gray">'+lessons.length+'日</span></summary><div class="ui-body">'+(lessons.map(d=>'<button type="button" class="history-item" data-review-date="'+d+'"><span>'+esc(formatDate(d,{year:true}))+'<strong>'+esc(data.entries[d].lessonTitle||'講義の学び')+'</strong></span><span aria-hidden="true">›</span></button>').join('')||'<p class="empty">復習を記録するとここに表示されます。</p>')+'</div></details></div>';
     return out;
   }
+  function goalThemeName(item){
+    return String(item.theme||'').trim()||'ジャンル未設定';
+  }
+  function groupGoalsByTheme(items){
+    const order=['仕事・キャリア','アプリ開発・事業','家族・人間関係'],groups=new Map();
+    for(const item of items){
+      const theme=goalThemeName(item);
+      if(!groups.has(theme))groups.set(theme,[]);
+      groups.get(theme).push(item);
+    }
+    const rank=theme=>{const index=order.indexOf(theme);return index<0?order.length:index;};
+    return [...groups].sort(([a],[b])=>rank(a)-rank(b)||a.localeCompare(b,'ja'));
+  }
   function renderGoal(){
     const source=Array.isArray(data.goals)?data.goals:[],history=Array.isArray(data.goalHistory)?data.goalHistory:[],checks=Array.isArray(data.goalChecks)?data.goalChecks:[];
-    const active=source.filter(g=>g.status!=='終了'),themes=[...new Set(source.map(g=>g.theme).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
-    const visible=active.filter(g=>(goalPeriodFilter==='all'||g.period===goalPeriodFilter)&&(goalThemeFilter==='all'||g.theme===goalThemeFilter));
+    const active=source.filter(g=>g.status!=='終了'),themes=groupGoalsByTheme(source).map(([theme])=>theme);
+    const visible=active.filter(g=>(goalPeriodFilter==='all'||g.period===goalPeriodFilter)&&(goalThemeFilter==='all'||goalThemeName(g)===goalThemeFilter));
     const link=/^[A-Za-z0-9_-]{20,}$/.test(syncConfig.sheetId)?'https://docs.google.com/spreadsheets/d/'+encodeURIComponent(syncConfig.sheetId)+'/edit':'';
-    let out=header('ゴール設定｜未来の自分を定義する','期間 × テーマ × 定性・定量で整理。変更がなければそのまま、気づいたときに更新。');
+    let out=header('ゴール設定｜未来の自分を定義する','仕事・キャリア、アプリ開発・事業、家族・人間関係など、ジャンルごとに見渡そう。見出しを開くと内容を確認できます。');
     out+='<div class="stack"><section class="form-panel"><div class="panelh"><h3>現在のゴール</h3><span class="chip">Google Sheetsと連携</span></div>';
-    out+='<div class="goal-top-stats"><div class="goal-stat"><strong>'+active.length+'</strong><span>登録中のゴール</span></div><div class="goal-stat"><strong>'+new Set(active.map(g=>g.theme)).size+'</strong><span>テーマ数</span></div><div class="goal-stat"><strong>'+history.length+'</strong><span>履歴の件数</span></div></div>';
+    out+='<div class="goal-top-stats"><div class="goal-stat"><strong>'+active.length+'</strong><span>登録中のゴール</span></div><div class="goal-stat"><strong>'+groupGoalsByTheme(active).length+'</strong><span>ジャンル数</span></div><div class="goal-stat"><strong>'+history.length+'</strong><span>履歴の件数</span></div></div>';
     out+='<p class="muted-text">ゴールをこの画面で登録・編集すると、端末に保存され、変更前後の内容が履歴に残ります。Google Sheetsとの同期は「Google連携」で差分を確認してから手動で行います。</p>';
     out+=renderGoalEditor();
     if(link)out+='<div class="foot-actions"><a href="'+esc(link)+'" target="_blank" rel="noopener noreferrer" class="button secondary">ゴール一覧をGoogle Sheetsで開く ↗</a>'+button('最新情報を同期 ↻','go-sync','outline')+'</div>';
     else out+='<div class="foot-actions">'+button('Google連携を設定 ↻','go-sync','secondary')+'</div>';
     out+='<div class="goal-filter-bar"><span class="smallmuted">期間</span>';
     for(const period of ['all',...GOAL_PERIODS])out+='<button type="button" data-goal-filter="'+esc(period)+'" class="'+(goalPeriodFilter===period?'active':'')+'">'+(period==='all'?'すべて':esc(period))+'</button>';
-    out+='<label class="smallmuted" for="goalThemeFilter">テーマ</label><select id="goalThemeFilter" data-goal-theme-filter><option value="all">すべてのテーマ</option>'+themes.map(t=>'<option value="'+esc(t)+'"'+(t===goalThemeFilter?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select></div>';
+    out+='<label class="smallmuted" for="goalThemeFilter">ジャンル</label><select id="goalThemeFilter" data-goal-theme-filter><option value="all">すべてのジャンル</option>'+themes.map(t=>'<option value="'+esc(t)+'"'+(t===goalThemeFilter?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select></div>';
     if(!active.length)out+='<div class="info">まだ「ゴール一覧」に登録されたゴールがありません。ChatGPTで期間とテーマを決めて最初のゴールを登録してから、Google連携で同期してください。過去の会話にある数値は、期間が明確になるまで勝手に設定しません。</div>';
-    else if(!visible.length)out+='<p class="empty">この期間・テーマに該当するゴールはありません。</p>';
-    for(const period of GOAL_PERIODS){
-      const list=visible.filter(g=>g.period===period);
-      if(!list.length)continue;
-      out+='<details class="ui-group goal-period" open><summary>🗓 '+esc(period)+'<span class="chip gray">'+list.length+'件</span></summary><div class="goal-card-grid ui-body">';
-      for(const g of list){
-        out+='<details class="goal-card ui-item"><summary><span><small>'+esc(g.theme||'テーマ未設定')+'</small><strong>'+esc(g.qualitative||g.quantitative||'内容未設定')+'</strong><small>期限：'+esc(g.deadline||'未設定')+'</small></span><span class="chip gray">'+esc(g.status||'進行中')+'</span></summary><div class="ui-body">';
-        out+='<h4>🌱 定性ゴール</h4><p class="'+(!g.qualitative?'subtle':'')+'">'+esc(g.qualitative||'未設定')+'</p>';
-        out+='<h4>📊 定量ゴール</h4><p class="'+(!g.quantitative?'subtle':'')+'">'+esc(g.quantitative?(g.quantitative+(g.unit?' '+g.unit:'')):'未設定')+'</p>';
-        if(g.scene)out+='<h4>🌅 未来の景色</h4><p>'+esc(g.scene)+'</p>';
-        if(g.be)out+='<h4>✨ 在り方（BE）</h4><p>'+esc(g.be)+'</p>';
-        if(g.why)out+='<h4>💭 ゴールの理由</h4><p>'+esc(g.why)+'</p>';
-        out+='<div class="fine">期限：'+esc(g.deadline||'未設定')+' ・ 最終更新：'+esc(g.updated||'—')+' ・ 最終確認：'+esc(g.checked||'—')+'</div>'+renderGoalEditor(g)+'</div></details>';
+    else if(!visible.length)out+='<p class="empty">この期間・ジャンルに該当するゴールはありません。</p>';
+    for(const [theme,goals] of groupGoalsByTheme(visible)){
+      out+='<details class="ui-group goal-theme-group"><summary><span>'+esc(theme)+'</span><span class="chip gray">'+goals.length+'件のゴール</span></summary><div class="ui-body">';
+      for(const period of GOAL_PERIODS){
+        const list=goals.filter(g=>g.period===period);
+        if(!list.length)continue;
+        out+='<section class="goal-period"><h4>🗓 '+esc(period)+' <span class="smallmuted">'+list.length+'件</span></h4><div class="goal-card-grid">';
+        for(const g of list){
+          out+='<details class="goal-card ui-item"><summary><span><strong>'+esc(g.qualitative||g.quantitative||'内容未設定')+'</strong><small>期限：'+esc(g.deadline||'未設定')+'</small></span><span class="chip gray">'+esc(g.status||'進行中')+'</span></summary><div class="ui-body">';
+          out+='<h4>🌱 定性ゴール</h4><p class="'+(!g.qualitative?'subtle':'')+'">'+esc(g.qualitative||'未設定')+'</p>';
+          out+='<h4>📊 定量ゴール</h4><p class="'+(!g.quantitative?'subtle':'')+'">'+esc(g.quantitative?(g.quantitative+(g.unit?' '+g.unit:'')):'未設定')+'</p>';
+          if(g.scene)out+='<h4>🌅 未来の景色</h4><p>'+esc(g.scene)+'</p>';
+          if(g.be)out+='<h4>✨ 在り方（BE）</h4><p>'+esc(g.be)+'</p>';
+          if(g.why)out+='<h4>💭 ゴールの理由</h4><p>'+esc(g.why)+'</p>';
+          out+='<div class="fine">期限：'+esc(g.deadline||'未設定')+' ・ 最終更新：'+esc(g.updated||'—')+' ・ 最終確認：'+esc(g.checked||'—')+'</div>'+renderGoalEditor(g)+'</div></details>';
+        }
+        out+='</div></section>';
       }
       out+='</div></details>';
     }
-    out+='</section><details class="panel ui-group"><summary>会話から育てるゴールの種</summary><div class="ui-body">'+renderGoalIdeas()+'</div></details><section class="form-panel"><div class="panelh"><h3>変更履歴</h3><span class="chip gray">'+history.length+'件</span></div>';
+    out+='</section>'+renderGoalIdeas()+'<section class="form-panel"><div class="panelh"><h3>変更履歴</h3><span class="chip gray">'+history.length+'件</span></div>';
     out+='<p class="muted-text">変更のたびに、当時の定性・定量ゴールや期限、未来の景色を記録します。履歴は上書きせず、新しいバージョンとして追加します。</p>';
-    const filtered=history.filter(h=>(goalPeriodFilter==='all'||h.period===goalPeriodFilter)&&(goalThemeFilter==='all'||h.theme===goalThemeFilter)).slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+    const filtered=history.filter(h=>(goalPeriodFilter==='all'||h.period===goalPeriodFilter)&&(goalThemeFilter==='all'||goalThemeName(h)===goalThemeFilter)).slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
     if(!filtered.length)out+='<p class="empty">まだ変更履歴はありません。最初のゴール登録から履歴を残していこう。</p>';
     for(const h of filtered.slice(0,15)){
       out+='<div class="goal-history-item"><div class="fine">'+esc(h.at||'日付未設定')+' ・ '+esc(h.period||'')+' ・ '+esc(h.action||'')+'</div><strong>'+esc(h.theme||'テーマ未設定')+'</strong><p>定性：'+esc(h.qualitative||'—')+'\n定量：'+esc(h.quantitative?(h.quantitative+(h.unit?' '+h.unit:'')):'—')+'\n期限：'+esc(h.deadline||'—')+'</p>'+(h.beforeSnapshot||h.afterSnapshot?'<details><summary>変更前後の内容</summary><pre>'+esc(JSON.stringify({変更前:h.beforeSnapshot,変更後:h.afterSnapshot},null,2))+'</pre></details>':'')+(h.reason?'<p>更新理由：'+esc(h.reason)+'</p>':'')+'</div>';
@@ -339,7 +356,7 @@
     if(filtered.length>15&&link)out+='<p class="muted-text">残りの履歴はGoogle Sheetsの「ゴール履歴」タブで確認できます。</p>';
     out+='</section><section class="form-panel"><div class="panelh"><h3>定期確認の履歴</h3><span class="chip gray">'+checks.length+'件</span></div>';
     out+='<p class="muted-text">見直して「変更なし」だった日も別の履歴として残せます。毎週日曜の確認後、記録を残したいときはChatGPTに保存を指示してください。</p>';
-    const crows=checks.filter(c=>(goalPeriodFilter==='all'||c.period===goalPeriodFilter)&&(goalThemeFilter==='all'||c.theme===goalThemeFilter)).slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+    const crows=checks.filter(c=>(goalPeriodFilter==='all'||c.period===goalPeriodFilter)&&(goalThemeFilter==='all'||goalThemeName(c)===goalThemeFilter)).slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
     out+=crows.length?crows.slice(0,8).map(c=>'<div class="goal-history-item"><div class="fine">'+esc(c.at||'')+' ・ '+esc(c.period||'')+'</div><strong>'+esc(c.theme||'')+'：'+esc(c.result||'確認')+'</strong>'+(c.note?'<p>'+esc(c.note)+'</p>':'')+'</div>').join(''):'<p class="empty">まだ定期確認の記録はありません。</p>';
     out+='</section><section class="form-panel"><details><summary style="cursor:pointer;font-weight:850">以前のゴールメモ（この端末内・旧形式）</summary><div class="info">この4項目は以前のバージョンの端末保存メモです。スマホとPCでは共有されません。正式な期間別ゴールは上の「ゴール一覧」に登録してください。既存のメモは削除せず残しています。</div>';
     out+=goalField('title','旧 MY GOAL','','',2,true)+goalField('scene','旧 未来の景色','','',3)+goalField('identity','旧 在り方（BE）','','',3)+goalField('why','旧 ゴールの理由','','',3);
@@ -882,20 +899,23 @@
     return 'いつもの朝のセルフエフィカシーワークを続けながら、このゴールの材料を一問ずつ深掘りして。既に分かっていることは繰り返し質問せず、期限・定性/定量・未来の景色・在り方・理由で不足している項目を確認して。未確定の内容は勝手に正式なゴールとして扱わない。\nテーマ：'+(idea.theme||'未設定')+'\n項目：'+(idea.field||'未設定')+'\n会話で明らかになった内容：'+(idea.content||'')+'\n次の質問：'+(idea.question||'この内容を今も目指したい？');
   }
   function renderGoalIdeaCard(i){
-    return '<article class="goal-card goal-idea-card"><div class="goal-card-top"><span class="title">'+esc(i.theme||'テーマ未設定')+'</span><span class="chip gray">'+esc(i.state||'要確認')+'</span></div>'+
-      '<div class="smallmuted">'+esc(i.field||'ゴールの材料')+' ・ '+esc(i.period||'期間は未決定')+'</div><p class="goal-idea-content">'+esc(i.content)+'</p>'+
+    return '<details class="goal-card goal-idea-card ui-item"><summary><span><small>'+esc(i.field||'ゴールの材料')+' ・ '+esc(i.period||'期間は未決定')+'</small><strong class="goal-idea-preview">'+esc(i.content||'内容未設定')+'</strong></span><span class="chip gray">'+esc(i.state||'要確認')+'</span></summary><div class="ui-body">'+
+      '<p class="goal-idea-content">'+esc(i.content)+'</p>'+
       (i.question?'<p class="goal-idea-question">💬 次に確認すること：'+esc(i.question)+'</p>':'')+
       (i.source?'<div class="smallmuted">出典：'+esc(i.source)+'</div>':'')+
-      '<div class="foot-actions">'+button('この続きをChatGPTで話す','copy-goal-question','secondary','data-idea-id="'+esc(i.id)+'"')+'</div></article>';
+      '<div class="foot-actions">'+button('この続きをChatGPTで話す','copy-goal-question','secondary','data-idea-id="'+esc(i.id)+'"')+'</div></div></details>';
   }
   function renderGoalIdeas(){
     const ideas=Array.isArray(data.goalIdeas)?data.goalIdeas:[],pending=activeGoalIdeas(),confirmed=ideas.filter(x=>x.state==='ゴール反映済み').length;
     let out='<section class="form-panel" id="goal-ideas"><div class="panelh"><h3>🌱 会話で育てるゴールの種</h3><span class="chip blue">'+ideas.length+'件の材料</span></div>';
     out+='<p class="muted-text">朝のChatGPTとの会話で出てきた理想・目標・価値観を少しずつ積み上げる場所。<b>「要確認」は正式なゴールではありません。</b> 不明な期間や数値は空欄のまま残します。</p>';
-    out+='<div class="goal-top-stats"><div class="goal-stat"><strong>'+pending.length+'</strong><span>確認・深掘りする材料</span></div><div class="goal-stat"><strong>'+confirmed+'</strong><span>ゴール反映済み</span></div><div class="goal-stat"><strong>'+new Set(ideas.map(i=>i.theme).filter(Boolean)).size+'</strong><span>見つかったテーマ</span></div></div>';
+    out+='<div class="goal-top-stats"><div class="goal-stat"><strong>'+pending.length+'</strong><span>確認・深掘りする材料</span></div><div class="goal-stat"><strong>'+confirmed+'</strong><span>ゴール反映済み</span></div><div class="goal-stat"><strong>'+groupGoalsByTheme(pending).length+'</strong><span>確認するジャンル</span></div></div>';
     if(!ideas.length)out+='<div class="info">まず毎朝のChatGPTとの会話から、ゴールの材料を1つ発見しよう。確認できた内容がシートに記録されると、Google連携でここに表示できます。</div>';
-    else out+='<div class="goal-card-grid">'+pending.slice(0,12).map(renderGoalIdeaCard).join('')+'</div>';
-    if(pending.length>12)out+='<p class="smallmuted">残りの材料はGoogle Sheetsの「ゴールの種」タブで確認できます。</p>';
+    else if(!pending.length)out+='<p class="empty">今、確認・深掘りする材料はありません。</p>';
+    else{
+      out+='<p class="smallmuted">ジャンル名を開くと、そのジャンルの材料がまとまって表示されます。気になる材料を開いて、全文や次の質問を確認できます。</p>';
+      for(const [theme,list] of groupGoalsByTheme(pending))out+='<details class="ui-group goal-theme-group"><summary><span>'+esc(theme)+'</span><span class="chip gray">'+list.length+'件の材料</span></summary><div class="goal-card-grid ui-body">'+list.map(renderGoalIdeaCard).join('')+'</div></details>';
+    }
     out+='<div class="foot-actions">'+button('Googleから最新情報を取り込む','go-sync','outline')+'</div></section>';
     return out;
   }
@@ -904,7 +924,7 @@
     return '<details class="goal-editor"><summary>'+(isNew?'新しいゴールを登録':'このゴールを編集')+'</summary>'+
       '<form data-goal-form data-goal-id="'+esc(current.id||'')+'"><div class="goal-editor-grid">'+
       '<div class="field"><label>期間</label><select name="period" required>'+GOAL_PERIODS.map(period=>'<option value="'+esc(period)+'"'+(current.period===period?' selected':'')+'>'+esc(period)+'</option>').join('')+'</select></div>'+
-      '<div class="field"><label>テーマ</label><input name="theme" maxlength="160" value="'+esc(current.theme||'')+'" required></div>'+
+      '<div class="field"><label>ジャンル（テーマ）</label><input name="theme" maxlength="160" value="'+esc(current.theme||'')+'" required></div>'+
       '<div class="field"><label>定性ゴール</label><textarea name="qualitative" maxlength="4000">'+esc(current.qualitative||'')+'</textarea></div>'+
       '<div class="field"><label>定量ゴール（値・条件）</label><textarea name="quantitative" maxlength="4000">'+esc(current.quantitative||'')+'</textarea></div>'+
       '<div class="field"><label>単位</label><input name="unit" maxlength="120" value="'+esc(current.unit||'')+'"></div>'+
