@@ -51,4 +51,8 @@
 .ui-theme{padding:10px 0;border-bottom:2px solid #dce7e1}
 .panel.ui-group{padding:0}.goal-card.ui-item{padding:0}.pg-action-card.ui-item{padding:0}
 .goal-card-grid.ui-body{align-items:start}.history-item strong{display:block;line-height:1.7}
+.goal-theme-group>summary>span:first-child{min-width:0;overflow-wrap:anywhere}
+.goal-theme-group .goal-card-grid{align-items:start}
+.goal-theme-group .goal-period:last-child{margin-bottom:0}
+.ui-item summary strong.goal-idea-preview{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 @media(max-width:600px){.ui-body{padding:12px}.ui-group>summary,.ui-item>summary{padding:14px;gap:8px}.goal-card-grid{grid-template-columns:1fr}.ui-item summary .chip{font-size:10px;max-width:85px}.goal-filter-bar{gap:8px}}

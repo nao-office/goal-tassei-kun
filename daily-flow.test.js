@@ -35,10 +35,47 @@ test('growth history groups months and keeps each day closed with original navig
  assert.match(out,/&lt;成長&gt;/);assert.equal(JSON.stringify(c.data),before);
 });
 
-test('goal overview puts current goals before ideas and preserves period filters and editors',()=>{
- const c={data:{goals:[{id:'g1',period:'1か月',theme:'仕事',qualitative:'<目標>',why:'理由',status:'進行中'}],goalHistory:[],goalChecks:[]},GOAL_PERIODS:['1か月','3か月','1年','3年','5年'],goalPeriodFilter:'all',goalThemeFilter:'all',syncConfig:{sheetId:''},header:()=>'',esc:x=>String(x).replaceAll('<','&lt;').replaceAll('>','&gt;'),renderGoalEditor:g=>'<div data-editor="'+(g?g.id:'new')+'"></div>',renderGoalIdeas:()=>'<div>ゴールの種</div>',goalField:()=>'',button:()=>''};
- vm.createContext(c);vm.runInContext(source('renderGoal'),c);const out=c.renderGoal();
- assert.ok(out.indexOf('現在のゴール')<out.indexOf('会話から育てる'));
+function goalFixture(data){
+ const c={data,GOAL_PERIODS:['1か月','3か月','1年','3年','5年'],goalPeriodFilter:'all',goalThemeFilter:'all',syncConfig:{sheetId:''},header:()=>'',esc:x=>String(x??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),renderGoalEditor:g=>'<div data-editor="'+(g?g.id:'new')+'"></div>',goalField:()=>'',button:(label,action,style,attrs='')=>'<button data-action="'+action+'" '+attrs+'>'+label+'</button>'};
+ vm.createContext(c);
+ for(const name of ['goalThemeName','groupGoalsByTheme','activeGoalIdeas','renderGoalIdeaCard','renderGoalIdeas','renderGoal'])vm.runInContext(source(name),c);
+ return c;
+}
+test('goals group by genre across periods and preserve filters, editors and stored data',()=>{
+ const c=goalFixture({goals:[
+  {id:'g1',period:'1か月',theme:'仕事・キャリア',qualitative:'<目標>',why:'理由',status:'進行中'},
+  {id:'g2',period:'1年',theme:'仕事・キャリア',qualitative:'長期目標'},
+  {id:'g3',period:'1か月',theme:'家族・人間関係',qualitative:'家族の目標'},
+  {id:'g4',period:'1か月',theme:'アプリ開発・事業',qualitative:'開発の目標'},
+  {id:'g5',period:'1か月',theme:'仕事・キャリア',status:'終了'}
+ ],goalHistory:[],goalChecks:[],goalIdeas:[]});
+ const before=JSON.stringify(c.data),out=c.renderGoal();
+ assert.ok(out.indexOf('現在のゴール')<out.indexOf('会話で育てるゴールの種'));
  assert.match(out,/<details class="goal-card ui-item"><summary>/);assert.match(out,/&lt;目標&gt;/);
  assert.match(out,/data-editor="g1"/);assert.match(out,/data-goal-filter="3か月"/);
+ const groups=out.split('<details class="ui-group goal-theme-group">').slice(1);
+ assert.equal(groups.length,3);assert.match(groups[0],/<summary><span>仕事・キャリア<\/span>/);
+ assert.match(groups[0],/2件のゴール/);assert.match(groups[0],/data-editor="g1"/);assert.match(groups[0],/data-editor="g2"/);
+ assert.doesNotMatch(groups[0],/data-editor="g3"/);assert.doesNotMatch(out,/data-editor="g5"/);
+ assert.match(groups[1],/<summary><span>アプリ開発・事業<\/span>/);assert.match(groups[2],/<summary><span>家族・人間関係<\/span>/);
+ c.goalPeriodFilter='1年';c.goalThemeFilter='仕事・キャリア';const filtered=c.renderGoal();
+ assert.match(filtered,/data-editor="g2"/);assert.doesNotMatch(filtered,/data-editor="g[134]"/);
+ assert.equal(JSON.stringify(c.data),before);
+});
+test('all pending goal ideas remain reachable by genre, including records beyond the first twelve',()=>{
+ const goalIdeas=Array.from({length:14},(_,i)=>({id:'idea-'+i,theme:i%2?'家族・人間関係':'アプリ開発・事業',content:'材料'+i,state:'要確認',date:'2026-11-03',question:'次の質問',source:'会話'}));
+ goalIdeas.push({id:'career',theme:'仕事・キャリア',content:'<script>危険</script>'},{id:'custom',theme:'趣味・学び',content:'自由なジャンル'},{id:'unset',theme:'',content:'未分類'},{id:'done',theme:'家族・人間関係',state:'ゴール反映済み'},{id:'hold',theme:'家族・人間関係',state:'保留'});
+ const c=goalFixture({goalIdeas}),before=JSON.stringify(c.data),out=c.renderGoalIdeas();
+ const groups=out.split('<details class="ui-group goal-theme-group">').slice(1);
+ assert.equal(groups.length,5);assert.match(groups[0],/<summary><span>仕事・キャリア<\/span>/);
+ assert.match(groups[1],/7件の材料/);assert.match(groups[1],/data-idea-id="idea-12"/);assert.doesNotMatch(groups[1],/data-idea-id="idea-13"/);
+ assert.match(groups[2],/data-idea-id="idea-13"/);assert.match(out,/趣味・学び/);assert.match(out,/ジャンル未設定/);
+ assert.equal((out.match(/data-idea-id=/g)||[]).length,17);
+ assert.doesNotMatch(out,/data-idea-id="(?:done|hold)"/);assert.doesNotMatch(out,/<script>/);assert.match(out,/&lt;script&gt;/);
+ assert.match(out,/<details class="goal-card goal-idea-card ui-item"><summary>/);assert.match(out,/次の質問/);assert.match(out,/出典：会話/);
+ assert.equal(JSON.stringify(c.data),before);
+});
+test('goal ideas distinguish an empty collection from a collection with no pending items',()=>{
+ const c=goalFixture({goalIdeas:[]});assert.match(c.renderGoalIdeas(),/最初|材料を1つ発見/);
+ c.data.goalIdeas=[{id:'done',state:'ゴール反映済み'}];assert.match(c.renderGoalIdeas(),/今、確認・深掘りする材料はありません/);
 });
