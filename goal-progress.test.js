@@ -45,3 +45,18 @@ test('action history import appends unseen history without dropping local histor
   assert.equal(data.progress.sheetHistory.length,2);
   assert.ok(data.progress.sheetHistory.includes(local));
 });
+
+
+test('action overview groups by status and theme and keeps creation form collapsed',()=>{
+  const data={goals:[],entries:{},progress:progress.empty()};
+  data.progress.actions=[{id:'a1',title:'進行中の行動',theme:'仕事',status:'進行中'},{id:'a2',title:'保留の行動',theme:'家族',status:'保留'},{id:'a3',title:'完了した行動',theme:'仕事',status:'完了'},{id:'a4',title:'状態未設定',theme:'',status:''}];
+  const before=JSON.stringify(data);
+  const output=progress.render({data});
+  assert.match(output,/<details class="panel ui-group"><summary>＋ 新しいアクションを登録/);
+  assert.match(output,/<summary>進行中<span class="chip gray">1件/);
+  assert.match(output,/<details class="ui-group"><summary>完了/);
+  assert.match(output,/<h4 class="ui-theme">家族/);
+  assert.match(output,/その他/);
+  assert.equal((output.match(/class="pg-action-card ui-item"/g)||[]).length,4);
+  assert.equal(JSON.stringify(data),before);
+});

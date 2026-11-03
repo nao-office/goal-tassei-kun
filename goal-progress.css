@@ -28,3 +28,27 @@
 .pg-daily p{margin:4px 0;color:#628072}
 @media(max-width:800px){.pg-columns{grid-template-columns:1fr}.pg-today{align-items:flex-start;flex-wrap:wrap}}
 @media(max-width:720px){.pg-metrics b{font-size:23px}.pg-metrics span{font-size:10px}.pg-today{padding:15px}.nav{overflow-x:auto;justify-content:flex-start}.nav-btn{flex:0 0 67px}}
+
+
+/* Overview first, details on demand across goal, growth and action pages. */
+.ui-group{margin:14px 0;border:1px solid #dce7e1;border-radius:16px;background:#fff;overflow:hidden}
+.ui-group>summary,.ui-item>summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px;list-style:none;font-weight:800;min-height:56px}
+.ui-group>summary::-webkit-details-marker,.ui-item>summary::-webkit-details-marker{display:none}
+.ui-group>summary::after,.ui-item>summary::after{content:'＋';flex:0 0 auto;color:#35745a;font-size:20px}
+.ui-group[open]>summary::after,.ui-item[open]>summary::after{content:'−'}
+.ui-group[open]>summary{background:#f0f7f3;border-bottom:1px solid #dce7e1}
+.ui-group>summary .chip{margin-left:auto;white-space:nowrap}
+.ui-body{padding:18px;min-width:0}
+.ui-body p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}
+.ui-body h4{font-size:12px;color:#537362;margin:16px 0 6px}
+.ui-item{border:1px solid #e1e8e4;border-radius:12px;background:#fff;margin:10px 0;overflow:hidden}
+.ui-item>summary>span:first-child{min-width:0;flex:1}
+.ui-item summary strong,.ui-item summary small{display:block;overflow-wrap:anywhere}
+.ui-item summary strong{line-height:1.6;font-size:14px}
+.ui-item summary small{font-weight:500;font-size:12px;color:#73877b;margin:4px 0}
+.ui-item[open]>summary{border-bottom:1px solid #edf1ee}
+.ui-group summary:focus-visible,.ui-item summary:focus-visible{outline:3px solid #42936b;outline-offset:-3px}
+.ui-theme{padding:10px 0;border-bottom:2px solid #dce7e1}
+.panel.ui-group{padding:0}.goal-card.ui-item{padding:0}.pg-action-card.ui-item{padding:0}
+.goal-card-grid.ui-body{align-items:start}.history-item strong{display:block;line-height:1.7}
+@media(max-width:600px){.ui-body{padding:12px}.ui-group>summary,.ui-item>summary{padding:14px;gap:8px}.goal-card-grid{grid-template-columns:1fr}.ui-item summary .chip{font-size:10px;max-width:85px}.goal-filter-bar{gap:8px}}
