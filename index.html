@@ -137,6 +137,9 @@
   let syncConfig={sheetId:'',clientId:'',lastSync:'',lastCount:0,lastMethod:''}, googleToken='',googleTokenWritable=false, syncBusy=false, syncAuthBusy=false, writeBusy=false, autoSyncTickBusy=false, writeBaseline=null;
   let syncReview=null,syncReviewChoices={},goalReviewChoices={},goalSyncBaseline=null,safeSyncApproved=false,enableAutoAfterReview=false;
   let backupRestoreSyncGuard=false;
+  // Display evidence is session-only and scoped to the selected spreadsheet.
+  // Legacy lastSync also includes imports/CSV, so it is never proof of a send.
+  let localSaveEvidence='',syncDisplayEvidence={sheetId:'',work:{},goals:{}};
   let autoSyncEnabled=false,autoWriteToken=false,autoTokenExpiresAt=0,autoAuthBusy=false,autoSyncBlocked=false,autoSaveTimer=null,autoSilentSync=false,autoRenderDeferred=false,autoRetryAfter=0;
   let cloudWorkerUrl='',cloudSession='',authNeedsRelogin=false;
   const GOAL_PERIODS=["1か月","3か月","1年","3年","5年"];
@@ -212,8 +215,14 @@
     });
     return base;
   }
-  function load(){try{const s=localStorage.getItem(KEY);return s?normalize(JSON.parse(s)):initial()}catch(err){storageError=true;return initial()}}
-  function save(){try{localStorage.setItem(KEY,JSON.stringify(data));storageError=false;document.querySelectorAll('.storage-warning').forEach(el=>el.remove());return true;}catch(err){storageError=true;showToast('保存できません。ブラウザー設定を確認するかJSONで書き出してください。');return false;}}
+  function load(){try{const s=localStorage.getItem(KEY);const loaded=s?normalize(JSON.parse(s)):initial();localSaveEvidence=s?'loaded':'';return loaded;}catch(err){storageError=true;return initial()}}
+  function save(){
+    try{localStorage.setItem(KEY,JSON.stringify(data));}
+    catch(err){storageError=true;updateAutoSyncNotice();showToast('保存できません。ブラウザー設定を確認するかJSONで書き出してください。');return false;}
+    storageError=false;localSaveEvidence='saved';
+    document.querySelectorAll('.storage-warning').forEach(el=>el.remove());
+    updateAutoSyncNotice();return true;
+  }
   function featuredGoal(longTerm=false){
     const pool=(data.goals||[]).filter(g=>g.status!=='終了');
     const periods=longTerm?[...GOAL_PERIODS].reverse():GOAL_PERIODS;
@@ -259,7 +268,7 @@
   function renderPreviousAction(){
     const previousDate=dayShift(activeDate,-1);
     const previous=txt(data.entries[previousDate]?.tomorrow);
-    return `<section class="info"><strong>前日に決めた、次の一歩</strong><p>${previous?esc(previous):'前日の「明日の一歩」はまだ記録されていません。'}</p><p>ほかにやることはある？ 変更する？</p>${previous?button('この一歩を今日の行動に使う','use-previous-action','outline'):''}<p class="sync-small">${esc(formatDate(previousDate))} の端末内の記録を表示しています。会話で保存した内容が見つからないときは、Google連携から差分を確認してください。</p></section>`;
+    return `<section class="info"><strong>前日に決めた、次の一歩</strong><p>${previous?esc(previous):'前日の「明日の一歩」はまだ記録されていません。'}</p><p><strong>ほかにやることはある？ 変更する？</strong><br>まず前日の一歩を確認してから、いつもの4つの問いへ。追加・変更は下の「今日の行動」で編集できます。</p>${previous?button('この一歩を今日の行動に使う','use-previous-action','outline'):''}<p class="sync-small">${esc(formatDate(previousDate))} の端末内の記録を表示しています。会話で保存した内容が見つからないときは、Google連携から差分を確認してください。</p></section>`;
   }
   function usePreviousAction(){
     const previous=txt(data.entries[dayShift(activeDate,-1)]?.tomorrow);
@@ -270,17 +279,17 @@
   }
   function renderMorning(){const morningGoal=featuredGoal();const e=entry();const other=activeDate!==jstToday();return header('朝のセルフエフィカシーワーク','ゴールを実現する自分の視点から、今日の行動を決める。')+
     (storageError?'<div class="warning storage-warning">このブラウザーでは自動保存を確認できません。必要に応じてデータをエクスポートしてください。</div>':'')+
-    `<div class="stack">${other?`<div class="info">${esc(formatDate(activeDate))} の記録を編集中です。${button('今日に戻る','today','outline')}</div>`:''}${renderMorningGoalIdea()}
+    `<div class="stack">${other?`<div class="info">${esc(formatDate(activeDate))} の記録を編集中です。${button('今日に戻る','today','outline')}</div>`:''}${renderPreviousAction()}
     <section class="form-panel"><div class="form-heading"><div class="stepno">01</div><div><h3>ゴール側の自分を思い出す</h3><p>今の状況からではなく、達成した未来から考える。</p></div></div><div class="focus-card"><span class="section-label">MY GOAL</span><p>${esc(goalHeadline(morningGoal)||'ゴールが未設定です')}</p>${goalIntro(morningGoal)?`<p class="muted-text" style="font-weight:500">${morningGoal?esc(morningGoal.period+'・'+morningGoal.theme+'：'):''}${esc(goalIntro(morningGoal))}</p>`:''}</div>
     ${field('fit','1. 自分がゴール達成にふさわしい理由は？','例：私は実際にアプリを完成させ、人に使ってもらう行動を起こしてきた。','今の自分に、すでにある資質・経験・事実を探そう。')}
     ${field('normal','2. ゴール達成した自分にとって、何が当たり前？','例：毎朝、利用者の声をもとに価値のある改善を1つ決める。','ゴールを叶えた未来の日常を、具体的に。')}
-    ${renderPreviousAction()}${field('futureAction','3. 未来の自分が「今日の俺、よくやった」と思う行動は？','例：気になっていたことを、まず一度試す。')}</section>
+    ${field('futureAction','3. 未来の自分が「今日の俺、よくやった」と思う行動は？','例：気になっていたことを、まず一度試す。')}</section>
     <section class="form-panel"><div class="form-heading"><div class="stepno">02</div><div><h3>今日の行動を決める</h3><p>価値のある行動と、忙しい日でもできる小さな完了ライン。</p></div></div><div class="important">${field('valuableAction','◎ 今日、GOALに向かって一番価値のある行動は？','例：試作アプリを家族に実際に使ってもらう。','「やることの量」よりも、ゴールへの価値を意識しよう。',2)}${field('minimumAction','● 忙しくても実行できる最低限の完了ラインは？','例：家族にアプリを見せて、感想を1つ聞く。','「これなら必ず取り組める」という小ささでOK。',2)}</div>
     <div class="form-heading"><div class="stepno">03</div><div><h3>行動しない未来も認識する</h3><p>最後の問い。そこから自分の選択を決めよう。</p></div></div>${field('withoutAction','4. 今日の行動をしなかったら、どんな未来が続く？','例：アイデアだけ増え、使ってもらう経験が積み上がらない。','自分を責めるためではなく、今の一歩を選びやすくするための問い。')}
-    <div class="foot-actions">${button('今日の行動を確認する →','confirm-morning','dark')}<span class="status-note">入力内容は自動保存されます。</span></div></section></div>`;
+    </section>${renderMorningGoalIdea()}<div class="foot-actions">${button('今日の行動を確認する →','confirm-morning','dark')}<span class="status-note">入力内容は自動保存されます。</span></div></div>`;
   }
   function renderEvening(){const e=entry();const hasPlan=isPlanned(e);return header('今日の一歩を、成長に変える。','できた／できなかった、だけで終わらせない振り返り。')+
-    `<div class="stack"><div class="info">🐱 ChatGPTで『今日の振り返りを始めよう』と話して、最後に『今日の振り返りを保存して』。その後、${button('Google連携から取り込む ↻','go-sync','outline')} を押せば、この画面に反映されます。<br><span class="sync-small">※接続先シートへの保存後に取り込めます。アプリでの編集は「Google連携 → Google Sheetsに保存して同期」から明示的に書き戻せます。</span></div>${renderLessonReview()}<section class="form-panel"><div class="panelh"><h3>今日の行動計画</h3>${statusTag(e)}</div>${hasPlan?`<div class="focus-card"><span class="section-label">MOST VALUABLE ACTION</span><p>${esc(e.valuableAction)}</p><div class="line" style="margin:10px 0"></div><span class="label-mini">最低限の完了ライン</span><p style="font-size:13px">${esc(e.minimumAction)}</p></div>`:`<p class="empty">今日の行動計画はまだ設定されていません。まず朝のワークで決めることもできます。</p>${button('朝のワークを開く →','go-morning','secondary')}`}
+    `<div class="stack"><div class="info">🐱 ChatGPTで『今日の振り返りを始めよう』と話して、最後に『今日の振り返りを保存して』。その後、${button('Google連携から取り込む ↻','go-sync','outline')} を押せば、この画面に反映されます。<br><span class="sync-small">※接続先シートへの保存後に取り込めます。アプリでの編集は「Google連携 → 差分を確認（読み取りのみ） → 確認した差分を同期」から明示的に書き戻せます。</span></div>${renderLessonReview()}<section class="form-panel"><div class="panelh"><h3>今日の行動計画</h3>${statusTag(e)}</div>${hasPlan?`<div class="focus-card"><span class="section-label">MOST VALUABLE ACTION</span><p>${esc(e.valuableAction)}</p><div class="line" style="margin:10px 0"></div><span class="label-mini">最低限の完了ライン</span><p style="font-size:13px">${esc(e.minimumAction)}</p></div>`:`<p class="empty">今日の行動計画はまだ設定されていません。まず朝のワークで決めることもできます。</p>${button('朝のワークを開く →','go-morning','secondary')}`}
     <label class="checkbox-line"><input type="checkbox" data-check="minimumDone" ${e.minimumDone?'checked':''}><span><strong>最低限の完了ラインを達成した</strong><small>小さくても、行動できた自分を認めよう。</small></span></label><label class="checkbox-line"><input type="checkbox" data-check="valuableDone" ${e.valuableDone?'checked':''}><span><strong>一番価値のある行動を実行した</strong><small>完璧な成果でなくても「実行した」ならチェック。</small></span></label></section>
     <section class="form-panel"><div class="form-heading"><div class="stepno">✦</div><div><h3>昨日までの自分との差分</h3><p>結果だけでなく、行動と思考の変化を記録する。</p></div></div>${field('achievement','今日、実際に何ができた？','例：動く試作版を完成させて、操作してもらった。')}${field('growth','以前の自分にはできなかったことで、今日できたことは？','例：完璧を目指す前に、まず人に使ってもらえた。','小さな変化も、未来の自分を信じる根拠になる。')}${field('tomorrow','明日の自分に渡したい、次の一歩は？','例：使いにくかった点を1つ直す。', '',2)}<div class="foot-actions">${button(e.reviewed?'振り返りを更新する ✓':'今日の振り返りを完了','finish-review','dark')}${button('成長の記録を見る →','go-history','outline')}<span class="status-note">記録は自動保存されます。</span></div></section></div>`;
   }
@@ -446,49 +455,88 @@
   // must be initiated by a click. Background attempts get blocked on iOS/Chrome.
   // Show a persistent one-tap reconnect notice instead of repeatedly trying
   // popups on page load, focus or token expiry. Tokens remain memory-only.
+  function syncDisplayForSheet(){
+    const sheetId=txt(syncConfig.sheetId);
+    if(syncDisplayEvidence.sheetId!==sheetId)syncDisplayEvidence={sheetId,work:{},goals:{}};
+    return syncDisplayEvidence;
+  }
+  function recordSyncCheck(scope,snapshot,baseline,sheetId){
+    if(syncDisplayForSheet().sheetId!==sheetId)return;
+    const evidence=syncDisplayForSheet()[scope];
+    evidence.checkedAt=new Date().toISOString();
+    evidence.remoteState=!baseline?'no-baseline':JSON.stringify(snapshot)===JSON.stringify(baseline)?'unchanged':'changed';
+    evidence.checkFailed=false;
+  }
+  function recordSyncCheckFailure(scope,sheetId){if(syncDisplayForSheet().sheetId===sheetId)syncDisplayForSheet()[scope].checkFailed=true;}
+  function startSyncSend(scope,sheetId){if(syncDisplayForSheet().sheetId!==sheetId)return;syncDisplayForSheet()[scope].sending=true;updateAutoSyncNotice();}
+  function finishSyncSend(scope,count,sheetId){
+    if(syncDisplayForSheet().sheetId!==sheetId)return;
+    const evidence=syncDisplayForSheet()[scope];
+    evidence.sending=false;evidence.sendFailed=false;
+    if(count>0){evidence.sentAt=new Date().toISOString();}
+  }
+  function failSyncSend(scope,sheetId){
+    if(syncDisplayForSheet().sheetId!==sheetId)return;
+    const evidence=syncDisplayForSheet()[scope];
+    // A later local-storage failure must not erase a confirmed API result.
+    if(evidence.sending){evidence.sending=false;evidence.sendFailed=true;evidence.checkFailed=true;}
+  }
+  function syncEvidenceTime(at){return new Date(at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})+'（日本時間）';}
+  function syncEvidenceLines(){
+    const evidence=syncDisplayForSheet();
+    const local=storageError?'端末保存：失敗または未確認。ページを閉じずにJSONバックアップを書き出してください。'
+      :localSaveEvidence==='saved'?'端末保存：保存済み（このブラウザー）。'
+      :localSaveEvidence==='loaded'?'端末保存：保存されていた記録を読み込みました。'
+      :'端末保存：まだ保存していません。入力するとこのブラウザーに保存します。';
+    const scopes=[['work','ワーク・アクション'],['goals','ゴール管理']];
+    const sends=scopes.map(([scope,label])=>{
+      const item=evidence[scope];
+      return label+'：'+(item.sending?'送信中（完了未確認）':item.sendFailed?'直近の送信処理は未完了・結果未確認。差分を再確認してください'
+        :item.sentAt?'送信完了を確認 '+syncEvidenceTime(item.sentAt):'今回の起動中は送信完了の確認なし');
+    });
+    const checks=scopes.map(([scope,label])=>{
+      const item=evidence[scope];
+      const state=item.remoteState==='changed'?'同期基準から変更あり（更新元は判定できません）'
+        :item.remoteState==='unchanged'?'同期基準からの変更なし':'同期基準がなく変更の有無は未判定';
+      return label+'：'+(item.checkFailed?'直近の確認に失敗。現在の状態は未確認。':'')+
+        (item.checkedAt?state+'／'+syncEvidenceTime(item.checkedAt)+' 時点':'未確認');
+    });
+    const pending=writeBaseline?autoPending():null;
+    const pendingText=pending===null?'ワーク・アクションの未送信分は差分確認が必要です。'
+      :pending?'ワーク・アクションに同期基準と異なる端末の変更があります。'
+      :'ワーク・アクションは端末と保存済み同期基準に差分がありません。現在のSheetsとの一致を保証するものではありません。';
+    return [local,'Sheets送信：'+sends.join(' ／ ')+'。 '+pendingText,
+      'Sheets側の確認：'+checks.join(' ／ ')+'。',
+      '端末専用：週次レビュー・週間計画・講義一覧や複数講義のメモ・アクション候補/履歴/事実/GAP等。ゴール・ゴールの種は手動同期。自動同期はワーク・アクションの対応項目のみで、自動取り込みは行いません。'];
+  }
   function updateAutoSyncNotice(){
     const el=document.getElementById('autoSyncNotice');
     if(!el)return;
-    if(!autoSyncEnabled){
-      el.hidden=false;
-      el.className='auto-sync-notice warning';
-      el.innerHTML='<span>'+esc(storageError?'端末への保存を確認できません。JSONバックアップを書き出してください。':'自動同期オフ｜入力はこの端末に保存します。Google連携で差分を確認してください。')+'</span>'+button('Google連携を確認','go-sync','outline');
-      return;
-    }
-    if(autoWriteToken&&Date.now()>=autoTokenExpiresAt){
-      autoWriteToken=false;googleToken='';
-    }
-    const needsAuth=!autoWriteToken||!googleToken;
-    const pending=autoPending();
-    let message='',action='',style='';
-    if(autoSyncBlocked){
-      style='error';
-      message='安全のため自動同期を停止中です。端末の記録は保持されています。Google連携で競合・エラーを確認してください。';
-      action=button('Google連携を確認','go-sync','outline');
-    }else if(autoAuthBusy){
-      style='warning';
-      message='Googleとの接続を確認中です。端末内の記録は保持されています。';
-    }else if(!navigator.onLine){
-      style='warning';
-      message='オフラインです。未送信の変更は端末に保持し、オンライン復帰後に同期を試みます。';
-    }else if(needsAuth){
-      style='warning';
+    if(autoWriteToken&&Date.now()>=autoTokenExpiresAt){autoWriteToken=false;googleToken='';}
+    let message='',action=button('Google連携を確認','go-sync','outline'),style='';
+    if(storageError){style='error';message='端末への保存を確認できません。';}
+    else if(autoSyncBlocked){style='error';message='安全のため自動同期を停止中。Google連携で差分・エラーを確認してください。';}
+    else if(!navigator.onLine){style='warning';message='オフライン。Google Sheetsの現在の状態は確認できません。'+(autoSyncEnabled?'オンライン復帰後に安全確認を試みます。':'自動同期はオフです。');}
+    else if(!autoSyncEnabled){style='warning';message='自動同期オフ。Google連携で差分を確認してください。';}
+    else if(autoAuthBusy){message='Googleとの接続を確認中です。';}
+    else if(!autoWriteToken||!googleToken){
+      style='warning';message='Googleへの再接続が必要です。Sheetsへの送信完了はまだ確認できません。';
       const cloudReady=Boolean(cloudWorkerUrl&&cloudSession);
-      message=(cloudReady?'Googleとの接続を復旧できませんでした。':'Googleへの接続が必要です。')+(pending?'未送信の変更はこの端末に保存されています。':'端末内の記録は保持されています。')+(cloudReady?' 自動復旧を再試行できます。':cloudWorkerUrl?' 初回だけGoogleでログインしてください。':'');
       action=button(cloudReady?'自動接続を再試行':cloudWorkerUrl?'Googleに初回接続':'Googleに再接続','reconnect-auto-sync','outline');
-    }else if(writeBusy){
-      message='Google Sheetsに保存中です。端末の記録は保持されています。';
-    }else if(syncBusy){
-      message='Google Sheetsから最新の記録を確認中です。';
-    }else if(pending){
-      message='端末に保存済み。Google Sheetsへの自動保存を待っています。';
-    }else{
-      const last=syncConfig.lastSync?new Date(syncConfig.lastSync).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):'未実施';
-      message='自動同期オン｜前回の同期：'+last+'。';
-    }
-    el.hidden=false;
-    el.className='auto-sync-notice'+(style?' '+style:'');
-    el.innerHTML='<span>'+esc(storageError?'端末への保存を確認できません。JSONバックアップを書き出してください。':message)+'<small style="display:block">自動同期の対象：ワーク・アクションの対応項目。ゴールはGoogle連携で手動同期。週次レビュー等は端末内保存。</small></span>'+action;
+    }else if(writeBusy){message='Google Sheetsへの送信処理中です。';}
+    else if(syncBusy||autoSyncTickBusy){message='Google Sheetsの差分を確認中です。';}
+    else if(autoPending()){message='自動同期オン。端末の変更を安全確認してから送信します。';}
+    else{message='自動同期オン。Sheets側の変更を検出した場合は停止します。';}
+    el.hidden=false;el.className='auto-sync-notice'+(style?' '+style:'');
+    const detailsOpen=el.querySelector?.('details')?.open;
+    const lines=syncEvidenceLines();
+    const markup='<div><strong>'+esc(message)+'</strong><div>'+esc(lines[0])+'</div>'+
+      '<details class="sync-evidence-details"'+(detailsOpen?' open=""':'')+'><summary>Sheetsへの送信・変更確認・端末専用データ</summary>'+
+      lines.slice(1).map(line=>'<p class="sync-small">'+esc(line)+'</p>').join('')+'</details></div>'+action;
+    if(el.innerHTML!==markup)el.innerHTML=markup;
+    const panel=document.getElementById('syncEvidence');
+    const detailMarkup=lines.map(line=>'<p>'+esc(line)+'</p>').join('');
+    if(panel&&panel.innerHTML!==detailMarkup)panel.innerHTML=detailMarkup;
   }
   function editingControlFocused(){
     const el=document.activeElement;
@@ -503,8 +551,8 @@
     return writeBaseline?GoalWriteback.countPending(data,writeBaseline):(localEditsWithoutBaseline()?1:0);
   }
   function scheduleAutoSave(){
-    if(!autoSyncEnabled)return;
     updateAutoSyncNotice();
+    if(!autoSyncEnabled)return;
     if(autoSyncBlocked||!autoWriteToken||!googleToken||!autoPending())return;
     clearTimeout(autoSaveTimer);
     autoSaveTimer=setTimeout(()=>{autoSyncTick();},Math.max(1800,autoRetryAfter-Date.now()));
@@ -548,6 +596,7 @@
   }
   async function autoCommit(expectedRows){
     if(writeBusy||syncBusy||syncAuthBusy||autoAuthBusy||!autoWriteToken||!googleToken)return;
+    const sheetId=txt(syncConfig.sheetId);
     writeBusy=true;
     try{
       syncStatusMessage('変更をGoogle Sheetsへ自動保存しています…');
@@ -555,18 +604,22 @@
       // Snapshot: edits typed while a request is running must not be marked saved.
       const snapshot=JSON.parse(JSON.stringify(data));
       const previousBaseline=writeBaseline;
+      startSyncSend('work',sheetId);
       const result=await GoalWriteback.commit({
-        sheetId:syncConfig.sheetId,token:googleToken,data:snapshot,baseline:writeBaseline,expectedRows
+        sheetId,token:googleToken,data:snapshot,baseline:writeBaseline,expectedRows
       });
+      finishSyncSend('work',result.count,sheetId);
       writeBaseline=GoalWriteback.baselineFromRows(result.workRows,result.actionRows);
       if(!saveWriteBaseline())throw Error('同期の基準情報を保存できませんでした');
       syncConfig.lastSync=new Date().toISOString();
       syncConfig.lastMethod='自動保存';
       saveSyncConfig();
+      recordSyncCheck('work',writeBaseline,writeBaseline,sheetId);
       mergeAfterAutoCommit(result.workRows,result.actionRows,snapshot,previousBaseline);
       autoRetryAfter=0;
       syncStatusMessage('自動保存完了：'+new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}));
     }catch(error){
+      failSyncSend('work',sheetId);
       autoRetryAfter=Date.now()+60000;
       autoSyncBlocked=true;
       if(/API 401|API 403/.test(error.message)){autoWriteToken=false;googleToken='';}
@@ -580,6 +633,7 @@
   async function autoSyncTick(){
     if(!GoalWriteback.canAutoSync({enabled:autoSyncEnabled,approved:safeSyncApproved,baseline:writeBaseline,
       restoreGuard:backupRestoreSyncGuard,blocked:autoSyncBlocked})||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy||document.hidden||Date.now()<autoRetryAfter)return;
+    const sheetId=txt(syncConfig.sheetId);
     autoSyncTickBusy=true;
     try{
       if((!autoWriteToken||!googleToken||Date.now()>=autoTokenExpiresAt)&&cloudWorkerUrl&&cloudSession){
@@ -594,7 +648,8 @@
       if(!/^[A-Za-z0-9_-]{20,}$/.test(txt(syncConfig.sheetId))){
         throw Error('スプレッドシートIDを確認してください。Drive設定は自動変更しません');
       }
-      const currentRows=await GoalWriteback.load(syncConfig.sheetId,googleToken);
+      const currentRows=await GoalWriteback.load(sheetId,googleToken);
+      recordSyncCheck('work',GoalWriteback.baselineFromRows(currentRows.workRows,currentRows.actionRows),writeBaseline,sheetId);
       const reviewed=GoalWriteback.preview(data,writeBaseline,currentRows.workRows,currentRows.actionRows);
       const unsafe=reviewed.some(group=>group.values.some(field=>!['端末だけに存在','端末で変更'].includes(field.status)));
       if(unsafe){
@@ -606,9 +661,10 @@
       else syncStatusMessage('同期可能です。Google Sheets側に未確認の変更はありません');
     }catch(error){
       autoSyncBlocked=true;
+      recordSyncCheckFailure('work',sheetId);
       syncStatusMessage('自動同期を保留：'+error.message);
     }finally{
-      autoSyncTickBusy=false;
+      autoSyncTickBusy=false;updateAutoSyncNotice();
     }
   }
 
@@ -818,11 +874,11 @@
    <section class="form-panel"><div class="panelh"><h3>① 記録先のGoogleスプレッドシート</h3><span class="chip gray">この端末の設定</span></div><p class="muted-text">Google SheetsのURLにある <code>/d/</code> と <code>/edit</code> の間のIDを入力してください。IDはこのブラウザー内に保存します。差分確認・同期ではGoogle Driveの設定ファイルを読み書きしません。別の端末では同じIDを入力してください。</p><div class="field"><label for="sheetId">GoogleスプレッドシートのID</label><input id="sheetId" type="text" maxlength="4000" data-config="sheetId" placeholder="シートのURLにある長い英数字" value="${esc(syncConfig.sheetId)}" autocomplete="off"></div><div class="sync-kv"><div><strong>セルフエフィカシーワーク記録</strong><div class="sync-small">朝・夜のワーク記録の対応項目を確認後に同期</div></div>${/^[a-zA-Z0-9_-]{20,}$/.test(syncConfig.sheetId)?`<a class="button outline" href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(syncConfig.sheetId)}/edit" target="_blank" rel="noopener noreferrer">シートを開く ↗</a>`:'<span class="smallmuted">シートIDを入力してください</span>'}</div></section>
    <section class="form-panel"><div class="panelh"><h3>② Googleから差分を確認</h3><span class="${connected?'chip':'chip gray'}">${connected?'この画面では認証済み':'Google認証が必要'}</span></div><p class="muted-text">「差分を確認」はSheetsの対象タブを読むだけです。端末の記録・同期基準・Google Sheets・Google Drive内の設定は変更しません。初回同期・復元後・競合時・同期基準がない場合は、項目ごとの選択が必要です。</p><div class="field"><label for="workerUrl">Cloudflare WorkerのURL（初回のみ設定）</label><p class="hint">例：https://goal-tassei-auth.example.workers.dev　Workerを先に公開し、Google CloudでリダイレクトURIを登録してください。<a href="https://github.com/nao-office/goal-tassei-kun/blob/main/worker/README.md" target="_blank" rel="noopener noreferrer">設定手順</a></p><input id="workerUrl" type="url" data-config="workerUrl" placeholder="https://xxxx.workers.dev" value="${esc(cloudWorkerUrl)}" autocomplete="off"></div><div class="field"><label for="clientId">Google Cloudで作成したOAuthクライアントID</label><p class="hint">従来のブラウザー認証用（Cloudflare Worker方式では入力不要）。</p><input id="clientId" type="text" maxlength="4000" data-config="clientId" placeholder="123456789-xxxx.apps.googleusercontent.com" value="${esc(syncConfig.clientId)}" autocomplete="off"></div><div class="foot-actions">${button('差分を確認（読み取りのみ）','google-sync','dark')}${button('確認した差分を同期','save-writeback','secondary')}${button(autoSyncEnabled?(autoSyncBlocked||!autoWriteToken?'自動同期を再確認':'自動同期を停止'):'自動同期を有効にする','toggle-auto-sync','secondary')}${autoSyncEnabled&&(autoSyncBlocked||!autoWriteToken)?button('自動同期を停止','disable-auto-sync','outline'):''}${button('端末のJSONバックアップ','export','outline')}${button('バックアップから復元','import','outline')}${button('接続設定の説明','setup-guide','outline')}</div><p class="sync-small">自動同期は差分確認が完了し、同期基準が有効で、競合やSheets側の変更がない場合だけ行います。安全が確認できない場合は停止します。認証や通信が必要な場合も、確認なしで書き込みません。</p></section>
    <section class="form-panel"><div class="panelh"><h3>③ OAuth設定前の取り込み方法</h3><span class="chip gray">すぐ試せる</span></div><p class="muted-text">シートの「ファイル → ダウンロード → カンマ区切り形式（.csv）」で<strong>「ワーク記録」タブ</strong>を開いた状態で保存し、ここで読み込みます。朝・夜・講義の学び（S～X列）をまとめて取り込めます。Googleアカウント認証の設定なしでも動作します。</p><div class="foot-actions">${button('CSVファイルを取り込む ↑','sync-csv','secondary')}</div></section>
-   ${renderSyncReview()}${renderGoalSyncReview()}<section class="form-panel"><div class="panelh"><h3>同期の状態</h3></div><div class="sync-status" id="syncStatus">${syncConfig.lastSync?`前回：${esc(new Date(syncConfig.lastSync).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}))}（${esc(syncConfig.lastMethod)}、処理 ${Number(syncConfig.lastCount)} 項目）`:'まだ同期していません。最初に差分を確認してください。'}</div><p class="sync-small">ワーク・アクションの既存自動同期は従来どおりです。ゴール管理はこの画面で差分確認後に手動同期します。履歴の追記は重複確認を行い、既存履歴行の更新・削除はしません。</p></section>
+   ${renderSyncReview()}${renderGoalSyncReview()}<section class="form-panel"><div class="panelh"><h3>保存・送信・変更確認の状態</h3></div><div id="syncEvidence"></div><p class="sync-small">以下の送信・読み取り結果は今回の起動中に確認したものです。画面を開き直した後は差分を再確認してください。表示だけで他の端末への反映を保証しません。</p><div class="sync-status" id="syncStatus">${syncConfig.lastSync?`前回の処理履歴（送信完了の証明ではありません）：${esc(new Date(syncConfig.lastSync).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}))}（${esc(syncConfig.lastMethod)}、処理 ${Number(syncConfig.lastCount)} 項目）`:'処理履歴はありません。最初に差分を確認してください。'}</div><p class="sync-small">ワーク・アクションの既存自動同期は従来どおりです。ゴール管理はこの画面で差分確認後に手動同期します。履歴の追記は重複確認を行い、既存履歴行の更新・削除はしません。</p></section>
    <section class="form-panel"><div class="panelh"><h3>④ 講義の学び（端末内の記録）</h3><span class="chip">${data.lessons.length}件登録済み</span></div><p class="muted-text"><b>初期の14件はアプリにも収録済み</b>です。講義の学びの一覧・個別メモは安全同期の対象外で、この端末に残ります。</p><div class="foot-actions">${button('学びのCSVを確認して追加','sync-lessons-csv','secondary')}</div><p class="sync-small">CSVからは既存IDを上書きせず、新しいIDの学びだけを追加します。今日選んだ講義の復習結果の一部は、差分画面で選んだ場合のみ「ワーク記録」対応列と同期されます。複数講義ごとのメモは端末専用です。</p></section>
-   <section class="form-panel"><div class="panelh"><h3>⑤ ゴールの種（端末内の記録）</h3><span class="chip blue">追加</span></div><p class="muted-text">ゴールの種は安全同期の対象外です。CSVを取り込む場合は既存IDを上書きせず、新しいIDの項目だけを端末に追加します。</p><div class="foot-actions">${button('ゴールの種CSVを確認して追加','sync-goal-ideas-csv','secondary')}${button('ゴール設定を見る →','go-goal','outline')}</div></section>
-    <section class="form-panel"><div class="panelh"><h3>⑥ アクション・週間計画も同期する</h3><span class="chip blue">新機能</span></div>
-      <p class="muted-text">ChatGPTで相談しながら作成した「アクションの種」「アクション一覧」「アクション履歴」「週間計画」をGoogle Sheetsから同期して表示できます。朝の最重要アクションとの連携にも対応しています。</p>
+   <section class="form-panel"><div class="panelh"><h3>⑤ ゴールの種（手動同期・CSV追加）</h3><span class="chip blue">追加</span></div><p class="muted-text">ゴールの種は「差分を確認（読み取りのみ）」で比較し、下のゴール管理の差分画面で選択して手動同期できます。自動同期の対象ではありません。CSVを取り込む場合は既存IDを上書きせず、新しいIDの項目だけを端末に追加します。</p><div class="foot-actions">${button('ゴールの種CSVを確認して追加','sync-goal-ideas-csv','secondary')}${button('ゴール設定を見る →','go-goal','outline')}</div></section>
+    <section class="form-panel"><div class="panelh"><h3>⑥ アクションの同期・週間計画のCSV追加</h3><span class="chip blue">新機能</span></div>
+      <p class="muted-text">「アクション一覧」の対応項目は差分を確認して同期できます。「アクションの種」「アクション履歴」「週間計画」はCSVから端末に追加できます。朝の最重要アクションとの連携にも対応しています。</p>
       <div class="foot-actions">
         ${button('アクション候補CSV','sync-action-csv','secondary','data-sheet="アクションの種"')}
         ${button('アクション一覧CSV','sync-action-csv','secondary','data-sheet="アクション一覧"')}
@@ -830,7 +886,7 @@
         ${button('週間計画CSV','sync-action-csv','secondary','data-sheet="週間計画"')}
       </div>
       <p class="sync-small">アクションの対応項目は差分画面で選択して同期できます。アクション候補・履歴・事実・GAP・週次レビュー・週間計画などは端末専用で、自動同期では変更しません。CSVの取込は既存IDを保持し、新しいIDだけ追加します。</p></section>
-    <section class="panel"><div class="panelh"><h3>朝と夜の連携の流れ</h3></div><ol class="sync-steps"><li>朝はChatGPTでセルフエフィカシーワーク → 「今日のワークを保存して」</li><li>夜はChatGPTで行動・成長・講義の学びを振り返る → 「今日の振り返りを保存して」</li><li>ChatGPTからGoogle Sheetsに日付ごと1行で保存（成功したことを確認）</li><li>アプリで「Googleに接続して同期」を押し、朝と夜を取り込む</li></ol><p class="sync-small">ChatGPT側でシートの更新が成功したことを確認してから同期してください。</p></section>
+    <section class="panel"><div class="panelh"><h3>朝と夜の連携の流れ</h3></div><ol class="sync-steps"><li>朝はChatGPTでセルフエフィカシーワーク → 「今日のワークを保存して」</li><li>夜はChatGPTで行動・成長・講義の学びを振り返る → 「今日の振り返りを保存して」</li><li>ChatGPTからGoogle Sheetsに日付ごと1行で保存（成功したことを確認）</li><li>アプリで「差分を確認（読み取りのみ）」を押し、朝・夜の差分で残す内容を選んで「確認した差分を同期」を押す</li></ol><p class="sync-small">ChatGPT側でシートの更新が成功したことを確認してから同期してください。</p></section>
   </div>`;}
   function normalizeDateValue(v){let s=String(v??'').trim();const m=s.match(/^(\d{4})[-\/]([01]?\d)[-\/]([0-3]?\d)$/);if(!m)return '';const d=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;const dt=new Date(d+'T12:00:00+09:00');if(Number.isNaN(+dt)||isoJst(dt)!==d)return '';return d;}
   function parseCheckbox(v){const x=String(v??'').trim().toLowerCase();if(['true','yes','はい','済','1','達成'].includes(x))return true;if(['false','no','いいえ','未','0','未達'].includes(x))return false;return null;}
@@ -896,7 +952,7 @@
     return (data.goalIdeas||[]).filter(i=>i.state!=='ゴール反映済み'&&i.state!=='保留').slice().sort((a,b)=>String(b.updated||b.date).localeCompare(String(a.updated||a.date)));
   }
   function goalIdeaPrompt(idea){
-    return 'いつもの朝のセルフエフィカシーワークを続けながら、このゴールの材料を一問ずつ深掘りして。既に分かっていることは繰り返し質問せず、期限・定性/定量・未来の景色・在り方・理由で不足している項目を確認して。未確定の内容は勝手に正式なゴールとして扱わない。\nテーマ：'+(idea.theme||'未設定')+'\n項目：'+(idea.field||'未設定')+'\n会話で明らかになった内容：'+(idea.content||'')+'\n次の質問：'+(idea.question||'この内容を今も目指したい？');
+    return '朝のセルフエフィカシーワークは、まず前日の「明日の一歩」を確認し、ほかにやることや変更があるか聞いてから、いつもの4つの問いを順番に進めて。既に答えた問いは繰り返さないで。4つの問いの後、希望する場合だけ、このゴールの材料を1問深掘りして。既に分かっていることは繰り返し質問せず、期限・定性/定量・未来の景色・在り方・理由で不足している項目を確認して。未確定の内容は勝手に正式なゴールとして扱わない。\nテーマ：'+(idea.theme||'未設定')+'\n項目：'+(idea.field||'未設定')+'\n会話で明らかになった内容：'+(idea.content||'')+'\n次の質問：'+(idea.question||'この内容を今も目指したい？');
   }
   function renderGoalIdeaCard(i){
     return '<details class="goal-card goal-idea-card ui-item"><summary><span><small>'+esc(i.field||'ゴールの材料')+' ・ '+esc(i.period||'期間は未決定')+'</small><strong class="goal-idea-preview">'+esc(i.content||'内容未設定')+'</strong></span><span class="chip gray">'+esc(i.state||'要確認')+'</span></summary><div class="ui-body">'+
@@ -941,7 +997,7 @@
     const idea=activeGoalIdeas().find(i=>txt(i.question));
     if(!idea)return '';
     return '<section class="form-panel"><div class="panelh"><h3>🌱 今日のゴール深掘り（任意）</h3><span class="chip blue">毎朝少しずつ</span></div>'+
-    '<p class="muted-text">いつものワークを止めずに、1つだけ未来の自分のことを考えてみよう。回答はChatGPTとの会話で話してね。</p>'+
+    '<p class="muted-text">4つの問いの後、余裕があれば1問だけ。今日は飛ばして、そのまま行動を確認しても大丈夫。回答はChatGPTとの会話で話してね。</p>'+
     '<div class="focus-card"><div class="smallmuted">'+esc(idea.theme||'ゴールの材料')+' ・ '+esc(idea.field||'')+'</div><p>'+esc(idea.question)+'</p><p class="smallmuted">前に話したこと：'+esc(idea.content)+'</p></div>'+
     button('この続きをChatGPTで話す','copy-goal-question','secondary','data-idea-id="'+esc(idea.id)+'"')+'</section>';
   }
@@ -1002,7 +1058,7 @@
       '<p class="muted-text">差分確認では、端末の記録・同期基準・Google Sheets・Google Driveの設定は変更していません。項目ごとに残す内容を選んでください。競合と同期基準がない場合は、選択するまで同期しません。</p>'+
       '<p class="sync-review-count">差分のある記録 '+counts.changedRecords+'件 ・ 比較した記録 '+counts.comparedRecords+'件 ・ 差分項目 '+counts.changedFields+'項目 ・ 一致 '+counts.equalRecords+'件</p><div class="sync-review-list">'+content+'</div>'+
       (canImportFromSheets?'<div class="info"><strong>初回の一括取り込み</strong><br>Google Sheetsにだけある記録をまとめて端末へ追加できます。端末側の記録は上書きせず、Sheetsへの書き込みも行いません。</div><div class="foot-actions">'+button('Google Sheetsの記録をまとめて取り込む','import-sync-review','secondary')+'</div>':'')+
-      '<div class="warning"><strong>この画面で同期する範囲</strong><br>朝・夜のワーク記録とアクション一覧の対応項目だけです。ゴール設定と旧ゴールメモ、ゴール変更/確認履歴、ゴールの種、講義一覧、複数講義ごとの復習メモ、アクション候補/履歴、アクションの事実・GAP・今週計画、週次レビュー/履歴、週間計画は対象外です。端末内のデータはそのまま残し、Sheetsから自動取り込みしません。</div>'+
+      '<div class="warning"><strong>この差分欄で同期する範囲</strong><br>朝・夜のワーク記録とアクション一覧の対応項目だけです。ゴール設定と旧ゴールメモ、ゴール変更/確認履歴、ゴールの種は、別の「ゴール管理」の差分欄で手動同期できます。講義一覧、複数講義ごとの復習メモ、アクション候補/履歴、アクションの事実・GAP・今週計画、週次レビュー/履歴、週間計画は対象外です。端末内のデータはそのまま残し、Sheetsから自動取り込みしません。</div>'+
       '<div class="foot-actions">'+button('選んだ内容で同期する','apply-sync-review','dark')+button('差分を閉じる','cancel-sync-review','outline')+'</div></section>';
   }
   function renderGoalSyncReview(){
@@ -1055,11 +1111,14 @@
       syncReview={sheetId,rows,goalRows,localSnapshot:JSON.stringify(data),
         groups:GoalWriteback.preview(data,writeBaseline,rows.workRows,rows.actionRows),
         goalGroups:GoalManagementSync.preview(data,goalSyncBaseline,goalRows)};
+      recordSyncCheck('work',GoalWriteback.baselineFromRows(rows.workRows,rows.actionRows),writeBaseline,sheetId);
+      recordSyncCheck('goals',GoalManagementSync.baselineFromRows(goalRows),goalSyncBaseline,sheetId);
       render();
       syncStatusMessage('差分を表示しました。ゴール管理とワーク・アクションの内容は、選択するまで変更されません。');
     }catch(error){
+      recordSyncCheckFailure('work',sheetId);recordSyncCheckFailure('goals',sheetId);
       syncStatusMessage('差分を確認できませんでした。記録は変更していません：'+error.message);
-    }finally{syncBusy=false;}
+    }finally{syncBusy=false;updateAutoSyncNotice();}
   }
   async function importReviewedSheetsData(){
     if(!syncReview||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
@@ -1075,10 +1134,12 @@
       return;
     }
     syncBusy=true;
-    let refreshReview=false;
+    let refreshReview=false,readCompleted=false;
     try{
       syncStatusMessage('取り込み直前にGoogle Sheetsの内容を再確認しています…');
       const live=await GoalWriteback.load(review.sheetId,googleToken);
+      recordSyncCheck('work',GoalWriteback.baselineFromRows(live.workRows,live.actionRows),writeBaseline,review.sheetId);
+      readCompleted=true;
       if(JSON.stringify(live.workRows)!==JSON.stringify(review.rows.workRows)
         ||JSON.stringify(live.actionRows)!==JSON.stringify(review.rows.actionRows)){
         syncReview=null;syncReviewChoices={};refreshReview=true;
@@ -1118,6 +1179,7 @@
         showToast('Google Sheetsの記録を端末に追加しました');
       }
     }catch(error){
+      if(!readCompleted)recordSyncCheckFailure('work',review.sheetId);
       syncStatusMessage('取り込みを完了できませんでした：'+error.message+'。Google Sheetsには書き込んでいません');
     }finally{
       syncBusy=false;
@@ -1138,10 +1200,12 @@
       syncStatusMessage('確認中に保存先が変わりました。もう一度差分を確認してください');
       return;
     }
-    syncBusy=true;let refreshReview=false;
+    syncBusy=true;let refreshReview=false,readCompleted=false;
     try{
       syncStatusMessage('取り込み直前にゴール関連タブを再確認しています…');
       const live=await GoalManagementSync.load(review.sheetId,googleToken);
+      recordSyncCheck('goals',GoalManagementSync.baselineFromRows(live),goalSyncBaseline,review.sheetId);
+      readCompleted=true;
       if(JSON.stringify(live)!==JSON.stringify(review.goalRows)){
         syncReview=null;goalReviewChoices={};refreshReview=true;
         syncStatusMessage('差分確認後にSheetsが変更されました。取り込まず、最新の差分を再確認します');
@@ -1179,6 +1243,7 @@
         showToast('ゴール管理データを端末に取り込みました');
       }
     }catch(error){
+      if(!readCompleted)recordSyncCheckFailure('goals',review.sheetId);
       syncStatusMessage('ゴール管理の取り込みに失敗しました：'+error.message+'。Sheetsには書き込んでいません');
     }finally{syncBusy=false;updateAutoSyncNotice();}
     if(refreshReview)await fetchSheetRows();
@@ -1246,8 +1311,10 @@
       syncBusy=true;writeBusy=true;
       try{
         const candidate=GoalManagementSync.applyRemote(data,review.goalRows,goalReviewChoices,review.goalGroups);
+        startSyncSend('goals',review.sheetId);
         const result=await GoalManagementSync.commit({sheetId:review.sheetId,token:googleToken,data:candidate,
           rows:review.goalRows,groups:review.goalGroups,choices:goalReviewChoices,confirmedClears});
+        finishSyncSend('goals',result.count,review.sheetId);
         const updatedGroups=GoalManagementSync.preview(candidate,null,result.rows);
         const merged=GoalManagementSync.applyRemote(candidate,result.rows,{},updatedGroups);
         const previousData=data,previousBaseline=goalSyncBaseline;
@@ -1264,9 +1331,11 @@
           return;
         }
         syncReview=null;goalReviewChoices={};render();
+        recordSyncCheck('goals',nextBaseline,nextBaseline,review.sheetId);
         syncStatusMessage('ゴール管理の手動同期が完了しました（'+result.count+'件）。自動同期は開始していません');
         showToast('ゴール管理を同期しました');
       }catch(error){
+        failSyncSend('goals',review.sheetId);
         syncStatusMessage('ゴール管理の同期を停止しました：'+error.message+'。内容を再確認してから操作してください');
       }finally{syncBusy=false;writeBusy=false;updateAutoSyncNotice();}
     });
@@ -1311,6 +1380,7 @@
       }catch(error){syncAuthBusy=false;syncStatusMessage('書き込み許可の確認を開始できません：'+error.message);}
       return;
     }
+    const sheetId=syncReview.sheetId;
     syncBusy=true;writeBusy=true;
     const previousData=data;
     const candidate=JSON.parse(JSON.stringify(data));
@@ -1324,13 +1394,16 @@
       }
       data=candidate;
       const currentBaseline=GoalWriteback.baselineFromRows(syncReview.rows.workRows,syncReview.rows.actionRows);
+      startSyncSend('work',sheetId);
       const result=await GoalWriteback.commit({sheetId:syncReview.sheetId,token:googleToken,data,baseline:currentBaseline,
         expectedRows:syncReview.rows});
+      finishSyncSend('work',result.count,sheetId);
       if(!save())throw Error('Google Sheets側の処理は完了しましたが、端末への保存に失敗しました。同期は停止しています。再読込前にJSONバックアップを確認してください');
       const nextBaseline=GoalWriteback.baselineFromRows(result.workRows,result.actionRows);
       writeBaseline=nextBaseline;
       if(!saveWriteBaseline())throw Error('同期後の基準を保存できませんでした。自動同期は有効にしません');
       syncConfig.lastSync=new Date().toISOString();
+      recordSyncCheck('work',nextBaseline,nextBaseline,sheetId);
       syncConfig.lastCount=result.count;
       syncConfig.lastMethod='差分を確認した同期';
       saveSyncConfig();
@@ -1349,6 +1422,7 @@
         enableAutoAfterReview=false;tryAutoConnect(true);
       }
     }catch(error){
+      failSyncSend('work',sheetId);
       if(data===candidate){
         data=previousData;
         if(!save())syncStatusMessage('同期に失敗し、端末データの復元保存にも失敗しました。ページを閉じず、すぐにJSONバックアップを書き出してください');
@@ -1534,7 +1608,7 @@
     input.value='';
     if(file)restoreBackupFile(file);
   },true);
-  document.addEventListener('input',ev=>{const target=ev.target;if(target.matches('[data-entry]')){let field=target.dataset.entry;if(!fieldNames.includes(field))return;entry()[field]=target.value;save();scheduleAutoSave();}else if(target.matches('[data-config]')){let k=target.dataset.config;if(k==='workerUrl'){const url=validCloudWorkerUrl(target.value);if(url!==cloudWorkerUrl){cloudWorkerUrl=url;cloudSession='';try{localStorage.setItem(CLOUD_WORKER_KEY,cloudWorkerUrl);localStorage.removeItem(CLOUD_SESSION_KEY);}catch(e){}autoWriteToken=false;googleToken='';googleTokenWritable=false;}return;}if(k!=='clientId'&&k!=='sheetId')return;syncConfig[k]=target.value;googleToken='';googleTokenWritable=false;autoWriteToken=false;autoSyncEnabled=false;clearTimeout(autoSaveTimer);try{localStorage.setItem(AUTO_SYNC_KEY,'0');}catch(e){}saveSyncConfig();if(k==='sheetId'){writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();safeSyncApproved=loadSafeSyncApproval();syncReview=null;}}else if(target.matches('[data-goal]')){let field=target.dataset.goal;if(!Object.prototype.hasOwnProperty.call(data.goal,field))return;data.goal[field]=target.value;save();}});
+  document.addEventListener('input',ev=>{const target=ev.target;if(target.matches('[data-entry]')){let field=target.dataset.entry;if(!fieldNames.includes(field))return;entry()[field]=target.value;save();scheduleAutoSave();}else if(target.matches('[data-config]')){let k=target.dataset.config;if(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy){target.value=k==='workerUrl'?cloudWorkerUrl:(syncConfig[k]||'');showToast('同期・認証処理中は接続先を変更できません。処理が終わってから変更してください。');return;}if(k==='workerUrl'){const url=validCloudWorkerUrl(target.value);if(url!==cloudWorkerUrl){cloudWorkerUrl=url;cloudSession='';try{localStorage.setItem(CLOUD_WORKER_KEY,cloudWorkerUrl);localStorage.removeItem(CLOUD_SESSION_KEY);}catch(e){}autoWriteToken=false;googleToken='';googleTokenWritable=false;}return;}if(k!=='clientId'&&k!=='sheetId')return;syncConfig[k]=target.value;googleToken='';googleTokenWritable=false;autoWriteToken=false;autoSyncEnabled=false;clearTimeout(autoSaveTimer);try{localStorage.setItem(AUTO_SYNC_KEY,'0');}catch(e){}saveSyncConfig();if(k==='sheetId'){writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();safeSyncApproved=loadSafeSyncApproval();syncReview=null;}updateAutoSyncNotice();}else if(target.matches('[data-goal]')){let field=target.dataset.goal;if(!Object.prototype.hasOwnProperty.call(data.goal,field))return;data.goal[field]=target.value;save();}});
   document.addEventListener('change',ev=>{if(GoalProgress.change(progressCtx(),ev))return;const t=ev.target;if(t.matches('[data-goal-theme-filter]')){goalThemeFilter=t.value;render();return;}if(t.matches('[data-check]')){let f=t.dataset.check;if(f!=='minimumDone'&&f!=='valuableDone')return;entry()[f]=t.checked;save();scheduleAutoSave();showToast(t.checked?'一歩を記録しました！':'チェックを更新しました。');}else if(t.id==='csvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){syncStatusMessage('CSVファイルが大きすぎます（3MB以下）');return;}const reader=new FileReader();reader.onload=()=>{try{mergeSheetRows(parseCsv(String(reader.result)),'CSV');}catch(e){syncStatusMessage('CSV読み込み失敗：'+e.message);showToast('CSV読み込み失敗：'+e.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='actionSyncCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ファイルが大きすぎます');return;}const sheet=pendingActionCsv;const reader=new FileReader();reader.onload=()=>{try{const n=GoalProgress.importSheet(sheet,parseCsv(String(reader.result)),data,save);render();showToast(sheet+'を'+n+'件取り込んだよ');}catch(err){showToast('CSVの読み込みに失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='goalIdeasCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ゴールの種CSVが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeGoalIdeaRows(parseCsv(String(reader.result)));render();showToast('ゴールの種を読み込みました');}catch(err){showToast('ゴールの種の読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='lessonCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('CSVファイルが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeLessonRows(parseCsv(String(reader.result)),'CSV');}catch(err){showToast('学びの読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='importFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>2_000_000){showToast('ファイルが大きすぎます（2MB以下）。');return;}const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||parsed.version!==1||typeof parsed.entries!=='object'||typeof parsed.goal!=='object')throw Error('形式');if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;data=normalize(parsed);save();go('home');showToast('バックアップを読み込みました。')}catch(err){showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。')}};reader.readAsText(file);}});
   document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev)){scheduleAutoSave();return;}const ideaButton=ev.target.closest('[data-action="copy-goal-question"]');if(ideaButton){const idea=(data.goalIdeas||[]).find(i=>i.id===ideaButton.dataset.ideaId);if(!idea)return;const prompt=goalIdeaPrompt(idea);if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>showToast('深掘り用の文章をコピーしました。ChatGPTの会話に貼り付けてね。')).catch(()=>showToast('コピーできませんでした。質問を会話で伝えてね。'));}else showToast('質問をChatGPTの会話で伝えてね。');return;}const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();scheduleAutoSave();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'use-previous-action':usePreviousAction();break;case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'reconnect-auto-sync':tryAutoConnect(true);break;case'save-writeback':saveLocalChangesToSheets();break;case'toggle-auto-sync':if(autoSyncEnabled&&autoWriteToken&&!autoSyncBlocked)disableAutoSync();else tryAutoConnect(true);break;case'disable-auto-sync':disableAutoSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'sync-goal-ideas-csv':document.getElementById('goalIdeasCsvFile').click();break;case'sync-action-csv':pendingActionCsv=el.dataset.sheet||'アクション一覧';document.getElementById('actionSyncCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[e.lessonId]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true};save();scheduleAutoSave();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}save();scheduleAutoSave();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}e.reviewed=true;save();scheduleAutoSave();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
   data=load();syncConfig=loadSyncConfig();writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();
