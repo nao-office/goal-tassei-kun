@@ -21,7 +21,7 @@ test('previous action only replaces today after explicit confirmation',()=>{
  vm.createContext(c);vm.runInContext(source('usePreviousAction'),c);c.usePreviousAction();assert.equal(current.valuableAction,'existing');assert.equal(saves,0);c.confirm=()=>true;c.usePreviousAction();assert.equal(current.valuableAction,'next');assert.equal(saves,1);
 });
 test('sync notice distinguishes offline and disabled states without a Sheets request',()=>{
- const el={};const c={document:{getElementById:()=>el},autoSyncEnabled:false,storageError:false,esc:x=>x,button:()=>'<button>確認</button>'};
+ const el={};const c={document:{getElementById:id=>id==='autoSyncNotice'?el:null},autoSyncEnabled:false,autoWriteToken:false,autoSyncBlocked:false,storageError:false,navigator:{onLine:true},esc:x=>x,button:()=>'<button>確認</button>',syncEvidenceLines:()=>['端末保存','Sheets送信','Sheets側の確認','ゴールはGoogle連携で手動同期']};
  vm.createContext(c);vm.runInContext(source('updateAutoSyncNotice'),c);c.updateAutoSyncNotice();assert.equal(el.hidden,false);assert.match(el.innerHTML,/自動同期オフ/);
  Object.assign(c,{autoSyncEnabled:true,autoWriteToken:true,autoTokenExpiresAt:Date.now()+60000,googleToken:'test',autoPending:()=>1,autoSyncBlocked:false,autoAuthBusy:false,navigator:{onLine:false}});c.updateAutoSyncNotice();assert.match(el.innerHTML,/オフライン/);assert.match(el.innerHTML,/ゴールはGoogle連携で手動同期/);
 });
