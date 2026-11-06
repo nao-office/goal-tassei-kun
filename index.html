@@ -259,7 +259,7 @@
   function renderPreviousAction(){
     const previousDate=dayShift(activeDate,-1);
     const previous=txt(data.entries[previousDate]?.tomorrow);
-    return `<section class="info"><strong>前日に決めた、次の一歩</strong><p>${previous?esc(previous):'前日の「明日の一歩」はまだ記録されていません。'}</p><p>ほかにやることはある？ 変更する？</p>${previous?button('この一歩を今日の行動に使う','use-previous-action','outline'):''}<p class="sync-small">${esc(formatDate(previousDate))} の端末内の記録を表示しています。会話で保存した内容が見つからないときは、Google連携から差分を確認してください。</p></section>`;
+    return `<section class="info"><strong>前日に決めた、次の一歩</strong><p>${previous?esc(previous):'前日の「明日の一歩」はまだ記録されていません。'}</p><p><strong>ほかにやることはある？ 変更する？</strong><br>まず前日の一歩を確認してから、いつもの4つの問いへ。追加・変更は下の「今日の行動」で編集できます。</p>${previous?button('この一歩を今日の行動に使う','use-previous-action','outline'):''}<p class="sync-small">${esc(formatDate(previousDate))} の端末内の記録を表示しています。会話で保存した内容が見つからないときは、Google連携から差分を確認してください。</p></section>`;
   }
   function usePreviousAction(){
     const previous=txt(data.entries[dayShift(activeDate,-1)]?.tomorrow);
@@ -270,14 +270,14 @@
   }
   function renderMorning(){const morningGoal=featuredGoal();const e=entry();const other=activeDate!==jstToday();return header('朝のセルフエフィカシーワーク','ゴールを実現する自分の視点から、今日の行動を決める。')+
     (storageError?'<div class="warning storage-warning">このブラウザーでは自動保存を確認できません。必要に応じてデータをエクスポートしてください。</div>':'')+
-    `<div class="stack">${other?`<div class="info">${esc(formatDate(activeDate))} の記録を編集中です。${button('今日に戻る','today','outline')}</div>`:''}${renderMorningGoalIdea()}
+    `<div class="stack">${other?`<div class="info">${esc(formatDate(activeDate))} の記録を編集中です。${button('今日に戻る','today','outline')}</div>`:''}${renderPreviousAction()}
     <section class="form-panel"><div class="form-heading"><div class="stepno">01</div><div><h3>ゴール側の自分を思い出す</h3><p>今の状況からではなく、達成した未来から考える。</p></div></div><div class="focus-card"><span class="section-label">MY GOAL</span><p>${esc(goalHeadline(morningGoal)||'ゴールが未設定です')}</p>${goalIntro(morningGoal)?`<p class="muted-text" style="font-weight:500">${morningGoal?esc(morningGoal.period+'・'+morningGoal.theme+'：'):''}${esc(goalIntro(morningGoal))}</p>`:''}</div>
     ${field('fit','1. 自分がゴール達成にふさわしい理由は？','例：私は実際にアプリを完成させ、人に使ってもらう行動を起こしてきた。','今の自分に、すでにある資質・経験・事実を探そう。')}
     ${field('normal','2. ゴール達成した自分にとって、何が当たり前？','例：毎朝、利用者の声をもとに価値のある改善を1つ決める。','ゴールを叶えた未来の日常を、具体的に。')}
-    ${renderPreviousAction()}${field('futureAction','3. 未来の自分が「今日の俺、よくやった」と思う行動は？','例：気になっていたことを、まず一度試す。')}</section>
+    ${field('futureAction','3. 未来の自分が「今日の俺、よくやった」と思う行動は？','例：気になっていたことを、まず一度試す。')}</section>
     <section class="form-panel"><div class="form-heading"><div class="stepno">02</div><div><h3>今日の行動を決める</h3><p>価値のある行動と、忙しい日でもできる小さな完了ライン。</p></div></div><div class="important">${field('valuableAction','◎ 今日、GOALに向かって一番価値のある行動は？','例：試作アプリを家族に実際に使ってもらう。','「やることの量」よりも、ゴールへの価値を意識しよう。',2)}${field('minimumAction','● 忙しくても実行できる最低限の完了ラインは？','例：家族にアプリを見せて、感想を1つ聞く。','「これなら必ず取り組める」という小ささでOK。',2)}</div>
     <div class="form-heading"><div class="stepno">03</div><div><h3>行動しない未来も認識する</h3><p>最後の問い。そこから自分の選択を決めよう。</p></div></div>${field('withoutAction','4. 今日の行動をしなかったら、どんな未来が続く？','例：アイデアだけ増え、使ってもらう経験が積み上がらない。','自分を責めるためではなく、今の一歩を選びやすくするための問い。')}
-    <div class="foot-actions">${button('今日の行動を確認する →','confirm-morning','dark')}<span class="status-note">入力内容は自動保存されます。</span></div></section></div>`;
+    </section>${renderMorningGoalIdea()}<div class="foot-actions">${button('今日の行動を確認する →','confirm-morning','dark')}<span class="status-note">入力内容は自動保存されます。</span></div></div>`;
   }
   function renderEvening(){const e=entry();const hasPlan=isPlanned(e);return header('今日の一歩を、成長に変える。','できた／できなかった、だけで終わらせない振り返り。')+
     `<div class="stack"><div class="info">🐱 ChatGPTで『今日の振り返りを始めよう』と話して、最後に『今日の振り返りを保存して』。その後、${button('Google連携から取り込む ↻','go-sync','outline')} を押せば、この画面に反映されます。<br><span class="sync-small">※接続先シートへの保存後に取り込めます。アプリでの編集は「Google連携 → 差分を確認（読み取りのみ） → 確認した差分を同期」から明示的に書き戻せます。</span></div>${renderLessonReview()}<section class="form-panel"><div class="panelh"><h3>今日の行動計画</h3>${statusTag(e)}</div>${hasPlan?`<div class="focus-card"><span class="section-label">MOST VALUABLE ACTION</span><p>${esc(e.valuableAction)}</p><div class="line" style="margin:10px 0"></div><span class="label-mini">最低限の完了ライン</span><p style="font-size:13px">${esc(e.minimumAction)}</p></div>`:`<p class="empty">今日の行動計画はまだ設定されていません。まず朝のワークで決めることもできます。</p>${button('朝のワークを開く →','go-morning','secondary')}`}
@@ -896,7 +896,7 @@
     return (data.goalIdeas||[]).filter(i=>i.state!=='ゴール反映済み'&&i.state!=='保留').slice().sort((a,b)=>String(b.updated||b.date).localeCompare(String(a.updated||a.date)));
   }
   function goalIdeaPrompt(idea){
-    return 'いつもの朝のセルフエフィカシーワークを続けながら、このゴールの材料を一問ずつ深掘りして。既に分かっていることは繰り返し質問せず、期限・定性/定量・未来の景色・在り方・理由で不足している項目を確認して。未確定の内容は勝手に正式なゴールとして扱わない。\nテーマ：'+(idea.theme||'未設定')+'\n項目：'+(idea.field||'未設定')+'\n会話で明らかになった内容：'+(idea.content||'')+'\n次の質問：'+(idea.question||'この内容を今も目指したい？');
+    return '朝のセルフエフィカシーワークは、まず前日の「明日の一歩」を確認し、ほかにやることや変更があるか聞いてから、いつもの4つの問いを順番に進めて。既に答えた問いは繰り返さないで。4つの問いの後、希望する場合だけ、このゴールの材料を1問深掘りして。既に分かっていることは繰り返し質問せず、期限・定性/定量・未来の景色・在り方・理由で不足している項目を確認して。未確定の内容は勝手に正式なゴールとして扱わない。\nテーマ：'+(idea.theme||'未設定')+'\n項目：'+(idea.field||'未設定')+'\n会話で明らかになった内容：'+(idea.content||'')+'\n次の質問：'+(idea.question||'この内容を今も目指したい？');
   }
   function renderGoalIdeaCard(i){
     return '<details class="goal-card goal-idea-card ui-item"><summary><span><small>'+esc(i.field||'ゴールの材料')+' ・ '+esc(i.period||'期間は未決定')+'</small><strong class="goal-idea-preview">'+esc(i.content||'内容未設定')+'</strong></span><span class="chip gray">'+esc(i.state||'要確認')+'</span></summary><div class="ui-body">'+
@@ -941,7 +941,7 @@
     const idea=activeGoalIdeas().find(i=>txt(i.question));
     if(!idea)return '';
     return '<section class="form-panel"><div class="panelh"><h3>🌱 今日のゴール深掘り（任意）</h3><span class="chip blue">毎朝少しずつ</span></div>'+
-    '<p class="muted-text">いつものワークを止めずに、1つだけ未来の自分のことを考えてみよう。回答はChatGPTとの会話で話してね。</p>'+
+    '<p class="muted-text">4つの問いの後、余裕があれば1問だけ。今日は飛ばして、そのまま行動を確認しても大丈夫。回答はChatGPTとの会話で話してね。</p>'+
     '<div class="focus-card"><div class="smallmuted">'+esc(idea.theme||'ゴールの材料')+' ・ '+esc(idea.field||'')+'</div><p>'+esc(idea.question)+'</p><p class="smallmuted">前に話したこと：'+esc(idea.content)+'</p></div>'+
     button('この続きをChatGPTで話す','copy-goal-question','secondary','data-idea-id="'+esc(idea.id)+'"')+'</section>';
   }
