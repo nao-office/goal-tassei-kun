@@ -9,6 +9,9 @@ on:
       - 'daily-flow.test.js'
       - 'morning-flow.test.js'
       - 'sync-status.test.js'
+      - 'save-failure.test.js'
+      - 'backup-safety.test.js'
+      - 'browser-device-sync.test.cjs'
       - 'browser-flow.test.cjs'
       - 'sheets-writeback.js'
       - 'sheets-writeback.test.js'
@@ -28,6 +31,9 @@ on:
       - 'daily-flow.test.js'
       - 'morning-flow.test.js'
       - 'sync-status.test.js'
+      - 'save-failure.test.js'
+      - 'backup-safety.test.js'
+      - 'browser-device-sync.test.cjs'
       - 'browser-flow.test.cjs'
       - 'sheets-writeback.js'
       - 'sheets-writeback.test.js'
@@ -46,7 +52,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test OAuth and synchronization safety
-        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -73,9 +79,11 @@ jobs:
       - name: Install isolated browser test tools
         run: |
           npm install --no-save --package-lock=false playwright@1.56.1
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
       - name: Test morning flow and status with mocked Google only
         run: node browser-flow.test.cjs
+      - name: Test two isolated device stores with mocked Sheets only
+        run: node browser-device-sync.test.cjs
       - name: Save browser screenshots
         if: always()
         uses: actions/upload-artifact@v4

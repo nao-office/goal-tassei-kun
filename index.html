@@ -218,7 +218,7 @@
   function load(){try{const s=localStorage.getItem(KEY);const loaded=s?normalize(JSON.parse(s)):initial();localSaveEvidence=s?'loaded':'';return loaded;}catch(err){storageError=true;return initial()}}
   function save(){
     try{localStorage.setItem(KEY,JSON.stringify(data));}
-    catch(err){storageError=true;updateAutoSyncNotice();showToast('保存できません。ブラウザー設定を確認するかJSONで書き出してください。');return false;}
+    catch(err){storageError=true;updateAutoSyncNotice();showToast('端末に保存できません。入力はこの画面に残っています。ページを閉じず、保存を再試行するかJSONで書き出してください。');return false;}
     storageError=false;localSaveEvidence='saved';
     document.querySelectorAll('.storage-warning').forEach(el=>el.remove());
     updateAutoSyncNotice();return true;
@@ -274,8 +274,10 @@
     const previous=txt(data.entries[dayShift(activeDate,-1)]?.tomorrow);
     if(!previous)return;
     if(txt(entry().valuableAction)&&!confirm('今日の価値のある行動を、前日に決めた一歩で置き換えますか？'))return;
-    entry().valuableAction=previous;
-    save();scheduleAutoSave();render();
+    const current=entry(),before=current.valuableAction;
+    current.valuableAction=previous;
+    if(!save()){current.valuableAction=before;return;}
+    scheduleAutoSave();render();
   }
   function renderMorning(){const morningGoal=featuredGoal();const e=entry();const other=activeDate!==jstToday();return header('朝のセルフエフィカシーワーク','ゴールを実現する自分の視点から、今日の行動を決める。')+
     (storageError?'<div class="warning storage-warning">このブラウザーでは自動保存を確認できません。必要に応じてデータをエクスポートしてください。</div>':'')+
@@ -514,7 +516,7 @@
     if(!el)return;
     if(autoWriteToken&&Date.now()>=autoTokenExpiresAt){autoWriteToken=false;googleToken='';}
     let message='',action=button('Google連携を確認','go-sync','outline'),style='';
-    if(storageError){style='error';message='端末への保存を確認できません。';}
+    if(storageError){style='error';message='端末への保存を確認できません。入力を残しています。';action=button('端末保存を再試行','retry-local-save','outline')+button('JSONで退避','export','outline');}
     else if(autoSyncBlocked){style='error';message='安全のため自動同期を停止中。Google連携で差分・エラーを確認してください。';}
     else if(!navigator.onLine){style='warning';message='オフライン。Google Sheetsの現在の状態は確認できません。'+(autoSyncEnabled?'オンライン復帰後に安全確認を試みます。':'自動同期はオフです。');}
     else if(!autoSyncEnabled){style='warning';message='自動同期オフ。Google連携で差分を確認してください。';}
@@ -552,7 +554,7 @@
   }
   function scheduleAutoSave(){
     updateAutoSyncNotice();
-    if(!autoSyncEnabled)return;
+    if(storageError||!autoSyncEnabled)return;
     if(autoSyncBlocked||!autoWriteToken||!googleToken||!autoPending())return;
     clearTimeout(autoSaveTimer);
     autoSaveTimer=setTimeout(()=>{autoSyncTick();},Math.max(1800,autoRetryAfter-Date.now()));
@@ -595,7 +597,7 @@
     if(!editingControlFocused())render();
   }
   async function autoCommit(expectedRows){
-    if(writeBusy||syncBusy||syncAuthBusy||autoAuthBusy||!autoWriteToken||!googleToken)return;
+    if(storageError||writeBusy||syncBusy||syncAuthBusy||autoAuthBusy||!autoWriteToken||!googleToken)return;
     const sheetId=txt(syncConfig.sheetId);
     writeBusy=true;
     try{
@@ -631,7 +633,7 @@
     }
   }
   async function autoSyncTick(){
-    if(!GoalWriteback.canAutoSync({enabled:autoSyncEnabled,approved:safeSyncApproved,baseline:writeBaseline,
+    if(storageError||!GoalWriteback.canAutoSync({enabled:autoSyncEnabled,approved:safeSyncApproved,baseline:writeBaseline,
       restoreGuard:backupRestoreSyncGuard,blocked:autoSyncBlocked})||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy||document.hidden||Date.now()<autoRetryAfter)return;
     const sheetId=txt(syncConfig.sheetId);
     autoSyncTickBusy=true;
@@ -1497,7 +1499,89 @@
   function render(){if(autoSilentSync&&editingControlFocused()){autoRenderDeferred=true;return;}const app=document.getElementById('app');let content={home:renderHome,morning:renderMorning,evening:renderEvening,history:renderHistory,goal:renderGoal,progress:()=>GoalProgress.render(progressCtx()),sync:renderSync}[tab]();app.innerHTML=content;if(tab==='goal'||tab==='progress')groupSecondaryPanels(app);document.querySelectorAll('[data-nav]').forEach(b=>{let yes=b.dataset.nav===tab;b.classList.toggle('active',yes);b.setAttribute('aria-current',yes?'page':'false')});document.title=names[tab]+'｜未来の自分';updateAutoSyncNotice();}
   function go(to,date=null){followToday=!date||date===jstToday();observedToday=jstToday();if(date)activeDate=date;else if(to==='home'||to==='morning'||to==='evening')activeDate=jstToday();tab=to;render();scrollTo({top:0,behavior:'instant'});}
   function showToast(message){if(autoSilentSync&&/同期しました|取り込みました/.test(message))return;const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2800)}
-  function exportData(){const json=JSON.stringify({...data,exportedAt:new Date().toISOString()},null,2);const blob=new Blob([json],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`mirai-goal-backup-${jstToday()}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast('バックアップをダウンロードしました。')}
+  // Normal backups and imports share a UTF-8 byte limit. Recovery-only downloads
+  // preserve every byte of unsupported data, but are never advertised as restorable.
+  const BACKUP_MAX_BYTES=20_000_000;
+  let backupReadSequence=0;
+  function backupObject(value){return !!value&&typeof value==='object'&&!Array.isArray(value);}
+  function backupPreservesSource(source,restored){
+    const pending=[[source,restored,'']];
+    while(pending.length){
+      let [before,after,key]=pending.pop();
+      // Earlier goal-history backups stored snapshots as JSON strings.
+      if((key==='beforeSnapshot'||key==='afterSnapshot')&&typeof before==='string'&&backupObject(after)){
+        try{before=JSON.parse(before);}catch(error){return false;}
+      }
+      if(before===after)continue;
+      if(Array.isArray(before)){
+        // The lesson catalog may append built-in lessons, but never drop/reorder input.
+        if(!Array.isArray(after)||after.length<before.length)return false;
+        for(let i=0;i<before.length;i++)pending.push([before[i],after[i],String(i)]);
+      }else if(backupObject(before)&&backupObject(after)){
+        for(const name of Object.keys(before)){
+          if(key===''&&name==='exportedAt')continue;
+          if(!Object.prototype.hasOwnProperty.call(after,name))return false;
+          pending.push([before[name],after[name],name]);
+        }
+      }else return false;
+    }
+    return true;
+  }
+  function prepareBackupData(parsed){
+    if(!backupObject(parsed)||parsed.version!==1||!backupObject(parsed.entries)||!backupObject(parsed.goal))throw Error('format');
+    if(parsed.recoveryOnly===true)throw Error('recovery');
+    const restored=normalize(parsed);
+    // Never silently shorten text, discard old history, or accept unknown fields.
+    // Also check a second load, so accepted data remains intact after a reload.
+    if(!backupPreservesSource(parsed,restored)||!backupPreservesSource(restored,normalize(restored)))throw Error('loss');
+    // Reserve the same export timestamp/defaults on import. A sparse legacy file
+    // must not become too large for an ordinary backup immediately after restore.
+    if(new Blob([JSON.stringify({...restored,exportedAt:new Date().toISOString()})]).size>BACKUP_MAX_BYTES)throw Error('size');
+    return restored;
+  }
+  function backupFailureMessage(error){
+    if(error?.message==='size')return '通常のバックアップはファイルと復元後の書き出しがともに20MB（20,000,000バイト）以下である必要があります。ファイルと現在の記録は変更していません。';
+    if(error?.message==='loss'||error?.message==='recovery')return 'このファイルは現在のアプリで全内容を保って復元できません。件数・文字数の上限や未対応の項目があります。元のJSONを保管してください。現在の記録は変更していません。';
+    return 'このファイルは読み込めません。アプリのJSONバックアップを選んでください。現在の記録は変更していません。';
+  }
+  function downloadBackupJson(json,recoveryOnly){
+    const blob=new Blob([json],{type:'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    let a;
+    try{
+      a=document.createElement('a');a.href=url;
+      a.download=`mirai-goal-${recoveryOnly?'recovery-only':'backup'}-${jstToday()}.json`;
+      document.body.appendChild(a);a.click();
+    }finally{
+      if(a)a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+  }
+  function exportData(){
+    try{
+      const backup={...data,exportedAt:new Date().toISOString()};
+      let json=JSON.stringify(backup),reason='';
+      if(new Blob([json]).size>BACKUP_MAX_BYTES)reason='20MB（20,000,000バイト）の上限を超えています。';
+      else{
+        try{
+          const restored=prepareBackupData(JSON.parse(json));
+          json=JSON.stringify({...restored,exportedAt:backup.exportedAt});
+          if(new Blob([json]).size>BACKUP_MAX_BYTES)reason='復元に必要な項目を含めると20MB（20,000,000バイト）の上限を超えます。';
+        }
+        catch(error){reason=error?.message==='size'?'復元に必要な項目を含めると20MB（20,000,000バイト）の上限を超えます。':'現在のアプリでは全内容を保ったまま復元できない項目・件数・文字数が含まれています。';}
+      }
+      if(reason){
+        if(!confirm(reason+'\n通常のバックアップとしては復元できません。記録を削らず「救出用JSON」として保存しますか？\n元の記録は変更しません。救出用ファイルは手動での確認・移行用です。'))return false;
+        json=JSON.stringify({...backup,recoveryOnly:true});
+      }
+      downloadBackupJson(json,!!reason);
+      showToast(reason?'救出用JSONの保存を開始しました。通常復元はできません。ファイルの保存を確認してください。':'バックアップの保存を開始しました。ファイルの保存を確認してください。');
+      return true;
+    }catch(error){
+      showToast('バックアップの書き出しを開始できませんでした。記録は変更していません。ページを閉じずにもう一度お試しください。');
+      return false;
+    }
+  }
   document.addEventListener('click',ev=>{
     const button=ev.target.closest?.('[data-action="relogin-google"]');
     if(!button)return;
@@ -1540,23 +1624,27 @@
     }
   },true);
   function restoreBackupFile(file){
-    if(file.size>2_000_000){showToast('ファイルが大きすぎます（2MB以下）。');return;}
-    const reader=new FileReader();
+    const sequence=++backupReadSequence;
+    if(!file)return;
+    if(!Number.isFinite(file.size)||file.size<0){showToast(backupFailureMessage());return;}
+    if(file.size>BACKUP_MAX_BYTES){showToast(backupFailureMessage(Error('size')));return;}
+    let reader;
+    try{reader=new FileReader();}
+    catch(error){showToast('バックアップファイルを読み込めませんでした。現在の記録は変更していません。');return;}
     reader.onload=()=>{
+      if(sequence!==backupReadSequence)return;
       let restoredData;
       try{
-        const parsed=JSON.parse(String(reader.result));
-        if(!parsed||parsed.version!==1||!parsed.entries||typeof parsed.entries!=='object'||Array.isArray(parsed.entries)||!parsed.goal||typeof parsed.goal!=='object'||Array.isArray(parsed.goal))throw Error('形式');
-        restoredData=normalize(parsed);
-      }catch(err){
-        showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。');
-        return;
-      }
+        const json=String(reader.result);
+        if(new Blob([json]).size>BACKUP_MAX_BYTES)throw Error('size');
+        restoredData=prepareBackupData(JSON.parse(json.replace(/^\uFEFF/,'')));
+      }catch(error){showToast(backupFailureMessage(error));return;}
       if(syncBusy||syncAuthBusy||writeBusy||autoAuthBusy||autoSyncTickBusy){
         showToast('Google同期中はバックアップを復元できません。同期が終わってからもう一度お試しください。');
         return;
       }
       if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;
+      if(sequence!==backupReadSequence)return;
       if(syncBusy||syncAuthBusy||writeBusy||autoAuthBusy||autoSyncTickBusy){
         showToast('Google同期中はバックアップを復元できません。同期が終わってからもう一度お試しください。');
         return;
@@ -1564,31 +1652,29 @@
       try{
         localStorage.setItem(BACKUP_RESTORE_SYNC_GUARD_KEY,'1');
         backupRestoreSyncGuard=true;
-        autoSyncEnabled=false;
-        autoWriteToken=false;
+        autoSyncEnabled=false;autoWriteToken=false;enableAutoAfterReview=false;
         googleToken='';googleTokenWritable=false;
+        clearTimeout(autoSaveTimer);autoSaveTimer=null;
         localStorage.setItem(AUTO_SYNC_KEY,'0');
+        localStorage.removeItem(AUTO_ENABLE_AFTER_REVIEW_KEY);
         localStorage.setItem(GOAL_BASELINE_KEY+syncConfig.sheetId,JSON.stringify({version:0}));
-      }catch(err){
+        goalSyncBaseline=null;syncReview=null;syncReviewChoices={};goalReviewChoices={};
+      }catch(error){
+        updateAutoSyncNotice();
         showToast(backupRestoreSyncGuard
           ?'自動同期またはゴール同期基準を安全に保存できないため、バックアップは復元しませんでした。自動同期は停止しています。'
-          :'自動同期を安全に停止できないため、バックアップは復元しませんでした。');
+          :'自動同期を安全に停止できないため、バックアップは復元しませんでした。現在の記録は変更していません。');
         return;
       }
-      clearTimeout(autoSaveTimer);
-      autoSaveTimer=null;
       const previousData=data;
       data=restoredData;
       if(!save()){
         data=previousData;
+        updateAutoSyncNotice();
         showToast('バックアップを保存できませんでした。現在の記録は変更されていません。ブラウザーの空き容量を確認してください。自動同期は安全のため停止しました。');
         return;
       }
-      syncReview=null;
-      syncReviewChoices={};goalReviewChoices={};
-      writeBaseline=null;
-      goalSyncBaseline=null;
-      safeSyncApproved=false;
+      writeBaseline=null;goalSyncBaseline=null;safeSyncApproved=false;
       try{
         localStorage.removeItem(WRITE_BASELINE_KEY+syncConfig.sheetId);
         localStorage.removeItem(SAFE_SYNC_APPROVED_KEY+syncConfig.sheetId);
@@ -1598,8 +1684,10 @@
       go('home');
       showToast('バックアップを読み込みました。安全のため自動同期を停止しました。Google連携で内容を確認してから必要に応じて再開してください。');
     };
-    reader.onerror=()=>showToast('バックアップファイルを読み込めませんでした。');
-    reader.readAsText(file);
+    reader.onerror=()=>{if(sequence===backupReadSequence)showToast('バックアップファイルを読み込めませんでした。現在の記録は変更していません。');};
+    reader.onabort=()=>{if(sequence===backupReadSequence)showToast('バックアップの読み込みを中止しました。現在の記録は変更していません。');};
+    try{reader.readAsText(file,'UTF-8');}
+    catch(error){if(sequence===backupReadSequence)showToast('バックアップファイルを読み込めませんでした。現在の記録は変更していません。');}
   }
   document.addEventListener('change',ev=>{
     if(ev.target.id!=='importFile')return;
@@ -1608,9 +1696,9 @@
     input.value='';
     if(file)restoreBackupFile(file);
   },true);
-  document.addEventListener('input',ev=>{const target=ev.target;if(target.matches('[data-entry]')){let field=target.dataset.entry;if(!fieldNames.includes(field))return;entry()[field]=target.value;save();scheduleAutoSave();}else if(target.matches('[data-config]')){let k=target.dataset.config;if(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy){target.value=k==='workerUrl'?cloudWorkerUrl:(syncConfig[k]||'');showToast('同期・認証処理中は接続先を変更できません。処理が終わってから変更してください。');return;}if(k==='workerUrl'){const url=validCloudWorkerUrl(target.value);if(url!==cloudWorkerUrl){cloudWorkerUrl=url;cloudSession='';try{localStorage.setItem(CLOUD_WORKER_KEY,cloudWorkerUrl);localStorage.removeItem(CLOUD_SESSION_KEY);}catch(e){}autoWriteToken=false;googleToken='';googleTokenWritable=false;}return;}if(k!=='clientId'&&k!=='sheetId')return;syncConfig[k]=target.value;googleToken='';googleTokenWritable=false;autoWriteToken=false;autoSyncEnabled=false;clearTimeout(autoSaveTimer);try{localStorage.setItem(AUTO_SYNC_KEY,'0');}catch(e){}saveSyncConfig();if(k==='sheetId'){writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();safeSyncApproved=loadSafeSyncApproval();syncReview=null;}updateAutoSyncNotice();}else if(target.matches('[data-goal]')){let field=target.dataset.goal;if(!Object.prototype.hasOwnProperty.call(data.goal,field))return;data.goal[field]=target.value;save();}});
-  document.addEventListener('change',ev=>{if(GoalProgress.change(progressCtx(),ev))return;const t=ev.target;if(t.matches('[data-goal-theme-filter]')){goalThemeFilter=t.value;render();return;}if(t.matches('[data-check]')){let f=t.dataset.check;if(f!=='minimumDone'&&f!=='valuableDone')return;entry()[f]=t.checked;save();scheduleAutoSave();showToast(t.checked?'一歩を記録しました！':'チェックを更新しました。');}else if(t.id==='csvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){syncStatusMessage('CSVファイルが大きすぎます（3MB以下）');return;}const reader=new FileReader();reader.onload=()=>{try{mergeSheetRows(parseCsv(String(reader.result)),'CSV');}catch(e){syncStatusMessage('CSV読み込み失敗：'+e.message);showToast('CSV読み込み失敗：'+e.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='actionSyncCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ファイルが大きすぎます');return;}const sheet=pendingActionCsv;const reader=new FileReader();reader.onload=()=>{try{const n=GoalProgress.importSheet(sheet,parseCsv(String(reader.result)),data,save);render();showToast(sheet+'を'+n+'件取り込んだよ');}catch(err){showToast('CSVの読み込みに失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='goalIdeasCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ゴールの種CSVが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeGoalIdeaRows(parseCsv(String(reader.result)));render();showToast('ゴールの種を読み込みました');}catch(err){showToast('ゴールの種の読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='lessonCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('CSVファイルが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeLessonRows(parseCsv(String(reader.result)),'CSV');}catch(err){showToast('学びの読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='importFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>2_000_000){showToast('ファイルが大きすぎます（2MB以下）。');return;}const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||parsed.version!==1||typeof parsed.entries!=='object'||typeof parsed.goal!=='object')throw Error('形式');if(!confirm('現在の記録を読み込んだバックアップで置き換えます。続けますか？'))return;data=normalize(parsed);save();go('home');showToast('バックアップを読み込みました。')}catch(err){showToast('このファイルは読み込めません。アプリのJSONバックアップを選んでください。')}};reader.readAsText(file);}});
-  document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev)){scheduleAutoSave();return;}const ideaButton=ev.target.closest('[data-action="copy-goal-question"]');if(ideaButton){const idea=(data.goalIdeas||[]).find(i=>i.id===ideaButton.dataset.ideaId);if(!idea)return;const prompt=goalIdeaPrompt(idea);if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>showToast('深掘り用の文章をコピーしました。ChatGPTの会話に貼り付けてね。')).catch(()=>showToast('コピーできませんでした。質問を会話で伝えてね。'));}else showToast('質問をChatGPTの会話で伝えてね。');return;}const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();scheduleAutoSave();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'use-previous-action':usePreviousAction();break;case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'reconnect-auto-sync':tryAutoConnect(true);break;case'save-writeback':saveLocalChangesToSheets();break;case'toggle-auto-sync':if(autoSyncEnabled&&autoWriteToken&&!autoSyncBlocked)disableAutoSync();else tryAutoConnect(true);break;case'disable-auto-sync':disableAutoSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'sync-goal-ideas-csv':document.getElementById('goalIdeasCsvFile').click();break;case'sync-action-csv':pendingActionCsv=el.dataset.sheet||'アクション一覧';document.getElementById('actionSyncCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[e.lessonId]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true};save();scheduleAutoSave();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}save();scheduleAutoSave();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}e.reviewed=true;save();scheduleAutoSave();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
+  document.addEventListener('input',ev=>{const target=ev.target;if(target.matches('[data-entry]')){let field=target.dataset.entry;if(!fieldNames.includes(field))return;entry()[field]=target.value;if(save())scheduleAutoSave();}else if(target.matches('[data-config]')){let k=target.dataset.config;if(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy){target.value=k==='workerUrl'?cloudWorkerUrl:(syncConfig[k]||'');showToast('同期・認証処理中は接続先を変更できません。処理が終わってから変更してください。');return;}if(k==='workerUrl'){const url=validCloudWorkerUrl(target.value);if(url!==cloudWorkerUrl){cloudWorkerUrl=url;cloudSession='';try{localStorage.setItem(CLOUD_WORKER_KEY,cloudWorkerUrl);localStorage.removeItem(CLOUD_SESSION_KEY);}catch(e){}autoWriteToken=false;googleToken='';googleTokenWritable=false;}return;}if(k!=='clientId'&&k!=='sheetId')return;syncConfig[k]=target.value;googleToken='';googleTokenWritable=false;autoWriteToken=false;autoSyncEnabled=false;clearTimeout(autoSaveTimer);try{localStorage.setItem(AUTO_SYNC_KEY,'0');}catch(e){}saveSyncConfig();if(k==='sheetId'){writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();safeSyncApproved=loadSafeSyncApproval();syncReview=null;}updateAutoSyncNotice();}else if(target.matches('[data-goal]')){let field=target.dataset.goal;if(!Object.prototype.hasOwnProperty.call(data.goal,field))return;data.goal[field]=target.value;save();}});
+  document.addEventListener('change',ev=>{if(GoalProgress.change(progressCtx(),ev))return;const t=ev.target;if(t.matches('[data-goal-theme-filter]')){goalThemeFilter=t.value;render();return;}if(t.matches('[data-check]')){let f=t.dataset.check;if(f!=='minimumDone'&&f!=='valuableDone')return;entry()[f]=t.checked;if(!save())return;scheduleAutoSave();showToast(t.checked?'一歩を記録しました！':'チェックを更新しました。');}else if(t.id==='csvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){syncStatusMessage('CSVファイルが大きすぎます（3MB以下）');return;}const reader=new FileReader();reader.onload=()=>{try{mergeSheetRows(parseCsv(String(reader.result)),'CSV');}catch(e){syncStatusMessage('CSV読み込み失敗：'+e.message);showToast('CSV読み込み失敗：'+e.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='actionSyncCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ファイルが大きすぎます');return;}const sheet=pendingActionCsv;const reader=new FileReader();reader.onload=()=>{try{const n=GoalProgress.importSheet(sheet,parseCsv(String(reader.result)),data,save);render();showToast(sheet+'を'+n+'件取り込んだよ');}catch(err){showToast('CSVの読み込みに失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='goalIdeasCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ゴールの種CSVが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeGoalIdeaRows(parseCsv(String(reader.result)));render();showToast('ゴールの種を読み込みました');}catch(err){showToast('ゴールの種の読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='lessonCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('CSVファイルが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeLessonRows(parseCsv(String(reader.result)),'CSV');}catch(err){showToast('学びの読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='importFile'){const file=t.files?.[0];t.value='';if(file)restoreBackupFile(file);}});
+  document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev)){scheduleAutoSave();return;}const ideaButton=ev.target.closest('[data-action="copy-goal-question"]');if(ideaButton){const idea=(data.goalIdeas||[]).find(i=>i.id===ideaButton.dataset.ideaId);if(!idea)return;const prompt=goalIdeaPrompt(idea);if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>showToast('深掘り用の文章をコピーしました。ChatGPTの会話に貼り付けてね。')).catch(()=>showToast('コピーできませんでした。質問を会話で伝えてね。'));}else showToast('質問をChatGPTの会話で伝えてね。');return;}const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();scheduleAutoSave();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'use-previous-action':usePreviousAction();break;case'retry-local-save':if(save()){scheduleAutoSave();showToast('端末内の記録を再保存しました。編集中のフォームは各画面の保存ボタンで確定してください。');}break;case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'reconnect-auto-sync':tryAutoConnect(true);break;case'save-writeback':saveLocalChangesToSheets();break;case'toggle-auto-sync':if(autoSyncEnabled&&autoWriteToken&&!autoSyncBlocked)disableAutoSync();else tryAutoConnect(true);break;case'disable-auto-sync':disableAutoSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'sync-goal-ideas-csv':document.getElementById('goalIdeasCsvFile').click();break;case'sync-action-csv':pendingActionCsv=el.dataset.sheet||'アクション一覧';document.getElementById('actionSyncCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}const previous={lessonId:e.lessonId,lessonReviewed:e.lessonReviewed,lessonNotes:e.lessonNotes};e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;e.lessonNotes={...e.lessonNotes,[e.lessonId]:{reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true}};if(!save()){Object.assign(e,previous);return;}scheduleAutoSave();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}if(!save())return;scheduleAutoSave();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}const wasReviewed=e.reviewed;e.reviewed=true;if(!save()){e.reviewed=wasReviewed;return;}scheduleAutoSave();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
   data=load();syncConfig=loadSyncConfig();writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();
   try{cloudWorkerUrl=validCloudWorkerUrl(localStorage.getItem(CLOUD_WORKER_KEY));cloudSession=localStorage.getItem(CLOUD_SESSION_KEY)||'';}catch(e){}
   try{
