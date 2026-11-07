@@ -10,10 +10,11 @@ function fixture(extra={}){
  const ctx={observedToday:'2026-11-03',activeDate:'2026-11-03',followToday:true,document:{hidden:false},editingControlFocused:()=>false,jstToday:()=> '2026-11-04',renders:0,render(){this.renders++},...extra};
  // Use a closure because browser functions are called without a receiver.
  ctx.render=()=>ctx.renders++;
+ ctx.backgroundRenderSafe=()=>!ctx.editingControlFocused()&&!ctx.dirtyForm;
  vm.createContext(ctx);vm.runInContext(source('checkDayRollover'),ctx);return ctx;
 }
 test('midnight advances today without altering stored records',()=>{const entries={'2026-11-03':{tomorrow:'test'}};const c=fixture({data:{entries}});c.checkDayRollover();assert.equal(c.activeDate,'2026-11-04');assert.equal(entries['2026-11-03'].tomorrow,'test');assert.equal(c.renders,1);c.checkDayRollover();assert.equal(c.renders,1);});
-test('editing and hidden pages defer rollover until safe',()=>{for(const props of [{document:{hidden:true}},{editingControlFocused:()=>true}]){const c=fixture(props);c.checkDayRollover();assert.equal(c.activeDate,'2026-11-03');assert.equal(c.observedToday,'2026-11-03');c.document.hidden=false;c.editingControlFocused=()=>false;c.checkDayRollover();assert.equal(c.activeDate,'2026-11-04');}});
+test('editing and hidden pages defer rollover until safe',()=>{for(const props of [{document:{hidden:true}},{editingControlFocused:()=>true},{dirtyForm:true}]){const c=fixture(props);c.checkDayRollover();assert.equal(c.activeDate,'2026-11-03');assert.equal(c.observedToday,'2026-11-03');c.document.hidden=false;c.editingControlFocused=()=>false;c.dirtyForm=false;c.checkDayRollover();assert.equal(c.activeDate,'2026-11-04');}});
 test('historical date stays selected through midnight',()=>{const c=fixture({followToday:false,activeDate:'2026-10-20'});c.checkDayRollover();assert.equal(c.activeDate,'2026-10-20');});
 test('previous action only replaces today after explicit confirmation',()=>{
  const current={valuableAction:'existing'};let saves=0;
@@ -22,7 +23,7 @@ test('previous action only replaces today after explicit confirmation',()=>{
 });
 test('sync notice distinguishes offline and disabled states without a Sheets request',()=>{
  const el={};const c={document:{getElementById:id=>id==='autoSyncNotice'?el:null},autoSyncEnabled:false,autoWriteToken:false,autoSyncBlocked:false,storageError:false,navigator:{onLine:true},esc:x=>x,button:()=>'<button>確認</button>',syncEvidenceLines:()=>['端末保存','Sheets送信','Sheets側の確認','ゴールはGoogle連携で手動同期']};
- vm.createContext(c);vm.runInContext(source('updateAutoSyncNotice'),c);c.updateAutoSyncNotice();assert.equal(el.hidden,false);assert.match(el.innerHTML,/自動同期オフ/);
+ vm.createContext(c);vm.runInContext(source('updateAutoSyncNotice'),c);c.updateAutoSyncNotice();assert.equal(el.hidden,false);assert.match(el.innerHTML,/自動連係オフ/);
  Object.assign(c,{autoSyncEnabled:true,autoWriteToken:true,autoTokenExpiresAt:Date.now()+60000,googleToken:'test',autoPending:()=>1,autoSyncBlocked:false,autoAuthBusy:false,navigator:{onLine:false}});c.updateAutoSyncNotice();assert.match(el.innerHTML,/オフライン/);assert.match(el.innerHTML,/ゴールはGoogle連携で手動同期/);
 });
 

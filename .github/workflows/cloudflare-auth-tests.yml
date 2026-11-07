@@ -12,6 +12,10 @@ on:
       - 'save-failure.test.js'
       - 'backup-safety.test.js'
       - 'browser-device-sync.test.cjs'
+      - 'keep-both-sync.js'
+      - 'keep-both-sync.test.js'
+      - 'automatic-app.test.js'
+      - 'browser-keep-both.test.cjs'
       - 'browser-flow.test.cjs'
       - 'sheets-writeback.js'
       - 'sheets-writeback.test.js'
@@ -34,6 +38,10 @@ on:
       - 'save-failure.test.js'
       - 'backup-safety.test.js'
       - 'browser-device-sync.test.cjs'
+      - 'keep-both-sync.js'
+      - 'keep-both-sync.test.js'
+      - 'automatic-app.test.js'
+      - 'browser-keep-both.test.cjs'
       - 'browser-flow.test.cjs'
       - 'sheets-writeback.js'
       - 'sheets-writeback.test.js'
@@ -52,7 +60,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test OAuth and synchronization safety
-        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -65,6 +73,7 @@ jobs:
           new Function(fs.readFileSync('goal-management-sync.js','utf8'));
           new Function(fs.readFileSync('goal-progress.js','utf8'));
           new Function(fs.readFileSync('cloud-auth.js','utf8'));
+          new Function(fs.readFileSync('keep-both-sync.js','utf8'));
           console.log('index.html JavaScript syntax OK');
           NODE
 
@@ -84,6 +93,8 @@ jobs:
         run: node browser-flow.test.cjs
       - name: Test two isolated device stores with mocked Sheets only
         run: node browser-device-sync.test.cjs
+      - name: Test automatic keep-both sync with mocked Sheets only
+        run: node browser-keep-both.test.cjs
       - name: Save browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
