@@ -17,7 +17,7 @@ test('editing and hidden pages defer rollover until safe',()=>{for(const props o
 test('historical date stays selected through midnight',()=>{const c=fixture({followToday:false,activeDate:'2026-10-20'});c.checkDayRollover();assert.equal(c.activeDate,'2026-10-20');});
 test('previous action only replaces today after explicit confirmation',()=>{
  const current={valuableAction:'existing'};let saves=0;
- const c={txt:x=>String(x??'').trim(),data:{entries:{yesterday:{tomorrow:'next'}}},dayShift:()=> 'yesterday',activeDate:'today',entry:()=>current,confirm:()=>false,save:()=>saves++,scheduleAutoSave:()=>{},render:()=>{}};
+ const c={txt:x=>String(x??'').trim(),data:{entries:{yesterday:{tomorrow:'next'}}},dayShift:()=> 'yesterday',activeDate:'today',entry:()=>current,confirm:()=>false,save:()=>{saves++;return true;},scheduleAutoSave:()=>{},render:()=>{}};
  vm.createContext(c);vm.runInContext(source('usePreviousAction'),c);c.usePreviousAction();assert.equal(current.valuableAction,'existing');assert.equal(saves,0);c.confirm=()=>true;c.usePreviousAction();assert.equal(current.valuableAction,'next');assert.equal(saves,1);
 });
 test('sync notice distinguishes offline and disabled states without a Sheets request',()=>{

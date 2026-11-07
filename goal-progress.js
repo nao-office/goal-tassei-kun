@@ -229,9 +229,11 @@ window.GoalProgress = (function () {
       var old=actionList(ctx.data).find(function(a){return a.id===editing;}),before=old?Object.assign({},old):null;
       var after=Object.assign({},old||{id:uid(),createdAt:now()},v,{updatedAt:now(),completedAt:v.status==='完了'?(old&&old.completedAt||now()):'',origin:old&&old.origin==='Google Sheets'?'端末内の変更':(old&&old.origin||'端末内')});
       delete after.reason;if(after.horizon==='今週'&&!after.plannedWeek)after.plannedWeek=weekMonday(today());
+      var previousActions=p.actions.slice(),previousHistory=p.actionHistory.slice();
       var localIndex=p.actions.findIndex(x=>x.id===after.id);if(localIndex>=0)p.actions[localIndex]=after;else p.actions.push(after);
       p.actionHistory.push({at:now(),id:after.id,reason:v.reason||(old?'更新':'新規登録'),before:before,after:Object.assign({},after)});
-      editing='';prefillIdea=null;var ok=ctx.save();ctx.render();ctx.toast(ok?'アクションを保存したよ':'この端末に保存できませんでした');return true;
+      if(!ctx.save()){p.actions=previousActions;p.actionHistory=previousHistory;ctx.toast('端末に保存できません。入力を残しています。もう一度保存してください。');return true;}
+      editing='';prefillIdea=null;ctx.render();ctx.toast('アクションを保存したよ');return true;
     }
     if(kind==='toggle'){
       var a=actionList(ctx.data).find(function(x){return x.id===id;});if(!a)return true;
@@ -253,9 +255,11 @@ window.GoalProgress = (function () {
       var week=selectedWeek||weekMonday(today()),oldR=selectedReview(ctx.data),beforeR=oldR.id?Object.assign({},oldR):null;
       var review=Object.assign({},oldR.id?oldR:{id:uid(),createdAt:now()},w,{week:week,goalId:selectedGoal,updatedAt:now()});
       delete review.reason;
+      var previousReviews=p.reviews.slice(),previousReviewHistory=p.reviewHistory.slice();
       if(oldR.id)p.reviews[p.reviews.indexOf(oldR)]=review;else p.reviews.push(review);
       p.reviewHistory.push({at:now(),id:review.id,reason:w.reason||(oldR.id?'週次レビュー更新':'初回レビュー'),before:beforeR,after:Object.assign({},review)});
-      var reviewed=ctx.save();ctx.render();ctx.toast(reviewed?'週次レビューを保存したよ':'この端末に保存できませんでした');return true;
+      if(!ctx.save()){p.reviews=previousReviews;p.reviewHistory=previousReviewHistory;ctx.toast('端末に保存できません。入力を残しています。もう一度保存してください。');return true;}
+      ctx.render();ctx.toast('週次レビューを保存したよ');return true;
     }
     if(kind==='review-to-today'){
       var r=selectedReview(ctx.data);if(r.keyAction)ctx.toMorning(r.keyAction,r.minimum,'',r.goalId);return true;

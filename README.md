@@ -2,6 +2,21 @@
 
 毎日のセルフエフィカシーワーク、ゴールの確認、アクション管理、週次レビューを一つにつなぐ静的Webアプリです。
 
+## 保存失敗とバックアップの保護（2026-11-07）
+
+- 朝の確定、夜の振り返り完了、講義の復習完了は、端末保存に成功した場合だけ成功表示と画面切り替えを行います。失敗時は入力を残し、同じボタンで再試行できます。アクション・週次レビューの保存失敗でもフォームを閉じず、再試行で変更履歴を重複させません。
+- 保存失敗中は自動同期の予約・送信を開始しません。上部に「端末保存を再試行」「JSONで退避」を表示します。再試行は端末内の記録の保存であり、編集中のフォームは各画面の保存ボタンで確定してください。保存できるまではページを閉じたり再読み込みしたりしないでください。
+- 通常のJSONバックアップは書き出し・復元とも **20,000,000 UTF-8バイト（20MB）以下**。改行・字下げを省いたJSONで書き出します。従来の2MB超のバックアップも、現在のデータ形式に合い、内容を省略せず保存できる場合は復元できます。端末の保存容量は別の制限なので、20MB以下でも保存できるとは限りません。
+- 件数や文字数の切り詰め、未対応項目の破棄が必要なファイルは、黙って一部だけ復元せず中止します。通常復元できない現在のデータは、明示確認後に内容を削らない「救出用JSON」として退避できます。救出用JSONは通常復元の対象外で、手動の確認・移行用です。
+- 復元の取消、形式エラー、容量超過、読み取り失敗は現在の記録を置き換えません。端末への保存に失敗した場合も従来の記録を維持します。復元を開始すると安全のため自動同期を停止し、成功後も再確認まで停止を保ちます。
+
+### テスト環境での端末間確認
+
+- `browser-flow.test.cjs` はChromiumで保存失敗・復帰、JSONダウンロードと復元、2MB超の日本語データ、既存の朝の順序と同期表示を確認します。
+- `browser-device-sync.test.cjs` は別々のブラウザー保存領域と共有の模擬Sheetsを使い、PCからモバイル、モバイルからPC、明示した取り込み、競合保留・取消、失敗した送信の再試行、比較後のSheets変更、端末専用記録の保持を確認します。
+- 実行環境の準備: `npm install --no-save --package-lock=false playwright@1.56.1`、`npx playwright install --with-deps chromium webkit`。実行は `node browser-flow.test.cjs` と `node browser-device-sync.test.cjs`。CIはUbuntu 24.04、デスクトップChromiumとiPhone 13画面設定のLinux WebKitを使います。`MOBILE_BROWSER=chromium` はWebKit未導入時の補助確認用で、WebKitの代わりにモバイル幅のChromiumを使います。
+- すべて架空データと通信モックです。**WebKitやiPhone画面設定での成功は、実iPhone/Safari、実Google認証、実Google Sheetsの同期確認を意味しません。** 実機確認は次の手順で、別のテスト用データを使って行ってください。
+
 ## 朝の順序と保存状態の表示（2026-11-06）
 
 - 朝は最初に前日の「明日の一歩」と追加・変更の確認を表示し、その後に既存の4つの問いを進めます。ゴールの深掘りは4問の後の任意項目です。既存の6入力欄と上書き確認を維持し、前夜の内容や最低ラインを自動補完しません。
@@ -9,7 +24,7 @@
 - 上部の状態欄とGoogle連携画面で、**端末保存・Sheetsへの送信結果・Sheets側の変更確認・端末専用データ**を分けて表示します。送信と読み取りの結果は、今回の起動中に実際に完了した処理だけを表示し、再読み込みや保存先変更で確認をやり直します。CSV取込・Googleへの接続・過去の処理日時だけで「Sheets送信済み」とは表示しません。
 - Sheets側の表示は、保存済み同期基準との比較結果と確認日時です。基準がなければ未判定、取得失敗なら現在の状態は未確認と表示します。変更を行った端末・人は判定できません。送信後の新しい端末編集は、別の未送信差分として残ります。
 - **同期範囲・自動同期の条件・Googleの権限・Sheetsの書き込み方式は変更していません。** 自動同期は対応するワーク・アクションの安全な送信だけで、Sheetsから端末への自動取り込みはありません。実データでのGoogle通信やiPhone実機確認は未実施です。
-- 検証は `node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js` で行います。テストはすべて架空データ・モック通信を使います。
+- 検証は `node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js` で行います。テストはすべて架空データ・モック通信を使います。
 
 ### 公開前の端末確認
 
