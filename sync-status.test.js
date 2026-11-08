@@ -13,7 +13,7 @@ function source(name){
 const sheetId='fixture-spreadsheet-123456';
 function fixture(extra={}){
  const notice={innerHTML:'',querySelector:()=>({open:true})},panel={innerHTML:''};
- const c={syncConfig:{sheetId,lastSync:'2026-11-03T00:00:00Z',lastMethod:'CSV'},syncDisplayEvidence:{sheetId:'',work:{},goals:{}},localSaveEvidence:'',storageError:false,
+ const c={syncConfig:{sheetId,lastSync:'2026-11-03T00:00:00Z',lastMethod:'CSV'},syncDisplayEvidence:{sheetId:'',work:{},goals:{}},localSaveEvidence:'',storageError:false,syncStatusText:'',
   writeBaseline:null,autoSyncEnabled:false,autoSyncBlocked:false,autoWriteToken:false,autoTokenExpiresAt:0,googleToken:'',autoAuthBusy:false,syncAuthBusy:false,writeBusy:false,syncBusy:false,autoSyncTickBusy:false,
   navigator:{onLine:true},document:{getElementById:id=>id==='autoSyncNotice'?notice:id==='syncEvidence'?panel:null,querySelectorAll:()=>[]},autoPending:()=>0,
   showToast:()=>{},button:(label,action)=>`<button data-action="${action}">${label}</button>`,...extra};
@@ -60,12 +60,13 @@ test('all automatic, offline, authentication and failure notices retain four evi
  for(const props of [{},{navigator:{onLine:false}},{autoSyncEnabled:true,navigator:{onLine:true},cloudWorkerUrl:'',cloudSession:''},{autoSyncBlocked:true},{storageError:true}]){
   Object.assign(c,props);c.updateAutoSyncNotice();
   for(const label of ['端末保存','Sheets送信','Sheets側の確認','端末専用'])assert.ok(c.notice.innerHTML.includes(label),label);
-  assert.match(c.notice.innerHTML,/sync-evidence-details" open/);assert.match(c.panel.innerHTML,/ゴール・ゴールの種は手動同期/);assert.match(c.panel.innerHTML,/自動取り込みは行いません/);
+  assert.match(c.notice.innerHTML,/sync-evidence-details" open/);assert.match(c.panel.innerHTML,/ゴール・ゴールの種は手動同期/);assert.match(c.panel.innerHTML,/Sheetsの更新を取り込みます/);
  }
 });
 function automaticFixture(resultOrError){
  const c=fixture({data:{entries:{test:{valuableAction:'before'}}},syncBusy:false,syncAuthBusy:false,autoWriteToken:true,googleToken:'test',writeBaseline:{version:1,work:{},actions:{}},
-  saveWriteBaseline:()=>true,saveSyncConfig:()=>{},protectOriginalLocalData:()=>{},mergeAfterAutoCommit:()=>{},scheduleAutoSave:()=>{},syncStatusMessage:()=>{},autoRetryAfter:0,
+  save:()=>true,saveWriteBaseline:()=>true,saveSyncConfig:()=>{},protectOriginalLocalData:()=>{},backgroundRenderSafe:()=>true,render:()=>{},scheduleAutoSave:()=>{},syncStatusMessage:()=>{},autoRetryAfter:0,
+  GoalKeepBoth:{commit:async()=>{if(resultOrError instanceof Error)throw resultOrError;return resultOrError;},reconcile:current=>current},
   GoalWriteback:{commit:async()=>{if(resultOrError instanceof Error)throw resultOrError;return resultOrError;},baselineFromRows:()=>({version:1,work:{},actions:{}})}});
  vm.runInContext(source('autoCommit'),c);return c;
 }
@@ -98,7 +99,7 @@ test('UI describes real manual goal seed sync and current buttons without obsole
 test('send-in-progress replaces previous success before a deferred request completes',async()=>{
  const c=automaticFixture({count:1,workRows:[],actionRows:[]});c.autoTokenExpiresAt=Date.now()+60000;
  c.startSyncSend('work',sheetId);c.finishSyncSend('work',1,sheetId);c.updateAutoSyncNotice();assert.match(c.notice.innerHTML,/送信完了を確認/);
- let resolve;c.GoalWriteback.commit=()=>new Promise(r=>resolve=r);const pending=c.autoCommit({});assert.match(c.notice.innerHTML,/送信中（完了未確認）/);assert.doesNotMatch(c.notice.innerHTML,/送信完了を確認/);
+ let resolve;c.GoalKeepBoth.commit=()=>new Promise(r=>resolve=r);const pending=c.autoCommit({});assert.match(c.notice.innerHTML,/送信中（完了未確認）/);assert.doesNotMatch(c.notice.innerHTML,/送信完了を確認/);
  resolve({count:1,workRows:[],actionRows:[]});await pending;assert.match(c.notice.innerHTML,/送信完了を確認/);
 });
 test('import recheck failures invalidate previous read evidence for either scope',async()=>{
