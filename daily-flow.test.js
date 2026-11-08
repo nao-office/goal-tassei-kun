@@ -80,3 +80,36 @@ test('goal ideas distinguish an empty collection from a collection with no pendi
  const c=goalFixture({goalIdeas:[]});assert.match(c.renderGoalIdeas(),/最初|材料を1つ発見/);
  c.data.goalIdeas=[{id:'done',state:'ゴール反映済み'}];assert.match(c.renderGoalIdeas(),/今、確認・深掘りする材料はありません/);
 });
+
+function navigationFixture(extra={}){
+ const c=fixture(extra);
+ c.scrollTo=()=>{};
+ vm.runInContext(source('go'),c);
+ return c;
+}
+test('normal navigation clears a historical date on every tab without modifying records',()=>{
+ for(const to of ['home','morning','evening','history','goal','progress','sync']){
+  const data={entries:{'2026-10-20':{tomorrow:'keep history'}}};
+  const before=JSON.stringify(data);
+  const c=navigationFixture({activeDate:'2026-10-20',followToday:false,data});
+  c.go(to);
+  assert.equal(c.activeDate,'2026-11-04');assert.equal(c.observedToday,'2026-11-04');
+  assert.equal(c.followToday,true);assert.equal(c.tab,to);assert.equal(c.renders,1);
+  assert.equal(JSON.stringify(data),before);
+ }
+});
+test('navigation after midnight updates the date before marking rollover observed',()=>{
+ const c=navigationFixture();c.go('goal');c.checkDayRollover();
+ assert.equal(c.activeDate,'2026-11-04');assert.equal(c.renders,1);
+ c.jstToday=()=> '2026-11-05';c.checkDayRollover();
+ assert.equal(c.activeDate,'2026-11-05');assert.equal(c.renders,2);
+});
+test('explicit historical navigation stays pinned while explicit today follows rollover',()=>{
+ for(const to of ['morning','evening']){
+  const c=navigationFixture();c.go(to,'2026-10-20');
+  assert.equal(c.activeDate,'2026-10-20');assert.equal(c.followToday,false);
+  c.jstToday=()=> '2026-11-05';c.checkDayRollover();assert.equal(c.activeDate,'2026-10-20');
+  c.go(to,'2026-11-05');assert.equal(c.followToday,true);
+  c.jstToday=()=> '2026-11-06';c.checkDayRollover();assert.equal(c.activeDate,'2026-11-06');
+ }
+});
