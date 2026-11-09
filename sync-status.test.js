@@ -132,3 +132,23 @@ test('local failure after a successful import read does not mislabel the remote 
   GoalWriteback:{load:async()=>rows,baselineFromRows:()=>({version:1,work:{},actions:{}}),importInitial:()=>({data:{entries:{}},summary:{recordsImported:1}})},syncStatusMessage:()=>{},localStorage:{setItem:()=>{},removeItem:()=>{}},saveSafeSyncApproval:()=>true,save:()=>false});
  vm.runInContext(source('importReviewedSheetsData'),c);await c.importReviewedSheetsData();assert.ok(c.syncDisplayEvidence.work.checkedAt);assert.equal(c.syncDisplayEvidence.work.checkFailed,false);assert.equal(c.data.entries.fixture.valuableAction,'keep');assert.doesNotMatch(c.syncEvidenceLines()[1],/送信完了を確認/);
 });
+
+test('a pending comparison removes stale review controls before its asynchronous read completes',async()=>{
+ let release;
+ const pending=new Promise(resolve=>{release=resolve;});
+ const renders=[],messages=[];
+ const original={entries:{'2026-11-09':{fit:'keep local'}}};
+ const c={syncBusy:false,syncAuthBusy:false,autoAuthBusy:false,writeBusy:false,autoSyncTickBusy:false,
+  syncConfig:{sheetId:'fixture-spreadsheet-123456'},txt:s=>s,googleToken:'synthetic',syncReview:{old:true},syncReviewChoices:{old:'device'},goalReviewChoices:{old:'device'},
+  data:original,writeBaseline:null,goalSyncBaseline:null,render:()=>renders.push(c.syncReview),syncStatusMessage:s=>messages.push(s),updateAutoSyncNotice:()=>{},recordSyncCheck:()=>{},recordSyncCheckFailure:()=>{},
+  GoalWriteback:{load:()=>pending,preview:()=>[],baselineFromRows:()=>({})},GoalManagementSync:{load:async()=>({}),preview:()=>[],baselineFromRows:()=>({})}};
+ vm.createContext(c);vm.runInContext(source('fetchSheetRows'),c);
+ const running=c.fetchSheetRows();
+ assert.equal(c.syncBusy,true);
+ assert.equal(renders.length,1,'old review is removed before any response arrives');
+ assert.equal(renders[0],null);assert.match(messages.at(-1),/読み取り中/);
+ assert.equal(c.data,original,'reading does not replace local data');
+ release({workRows:[],actionRows:[]});await running;
+ assert.equal(c.syncBusy,false);assert.equal(renders.length,2);assert.ok(c.syncReview);
+ assert.match(messages.at(-1),/差分を表示しました/);assert.equal(c.data,original);
+});
