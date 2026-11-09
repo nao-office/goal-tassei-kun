@@ -597,7 +597,7 @@
       saveSyncConfig();recordSyncCheck('work',writeBaseline,writeBaseline,sheetId);
       autoRetryAfter=0;
       if(result.archiveVerifiedCount)archiveView=null;
-      if(backgroundRenderSafe())render();else autoRenderDeferred=true;
+      if(backgroundRenderSafe())render({preserveDisclosures:true});else autoRenderDeferred=true;
       syncStatusMessage('自動連係が完了しました。'+(result.archiveVerifiedCount?'異なる内容 '+result.archiveVerifiedCount+'件を「同期の別記録」に保管しました。':'')+' '+new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}));
     }catch(error){
       failSyncSend('work',sheetId);autoRetryAfter=Date.now()+60000;
@@ -1498,7 +1498,33 @@
       fold.append(summary,body);section.replaceWith(fold);
     });
   }
-  function render(){if(autoSilentSync&&!backgroundRenderSafe()){autoRenderDeferred=true;return;}const app=document.getElementById('app');let content={home:renderHome,morning:renderMorning,evening:renderEvening,history:renderHistory,goal:renderGoal,progress:()=>GoalProgress.render(progressCtx()),sync:renderSync}[tab]();app.innerHTML=content;if(tab==='goal'||tab==='progress')groupSecondaryPanels(app);document.querySelectorAll('[data-nav]').forEach(b=>{let yes=b.dataset.nav===tab;b.classList.toggle('active',yes);b.setAttribute('aria-current',yes?'page':'false')});document.title=names[tab]+'｜未来の自分';updateAutoSyncNotice();}
+  function disclosureStates(app){
+    // Keep a user's opened/closed panels across background refreshes. Keys use
+    // stable record IDs where available, not mutable titles or list positions.
+    const states=new Map(),counts=new Map();
+    for(const fold of app.querySelectorAll('details')){
+      const parts=[];
+      for(let node=fold;node&&node!==app;node=node.parentElement){
+        if(node.tagName!=='DETAILS')continue;
+        const explicit=node.getAttribute('data-disclosure-key');
+        const summary=node.querySelector(':scope > summary');
+        const label=summary?.cloneNode(true);
+        if(label)label.querySelectorAll('.chip,small').forEach(el=>el.remove());
+        parts.unshift(explicit||label?.textContent.trim()||'details');
+      }
+      const base=JSON.stringify(parts),occurrence=counts.get(base)||0;
+      counts.set(base,occurrence+1);
+      states.set(base+':'+occurrence,{fold,open:fold.open});
+    }
+    return states;
+  }
+  function restoreDisclosures(app,previous){
+    if(!previous)return;
+    for(const [key,state] of disclosureStates(app)){
+      if(previous.has(key))state.fold.open=previous.get(key).open;
+    }
+  }
+  function render(options={}){if(autoSilentSync&&!backgroundRenderSafe()){autoRenderDeferred=true;return;}const app=document.getElementById('app');const disclosures=options.preserveDisclosures?disclosureStates(app):null;let content={home:renderHome,morning:renderMorning,evening:renderEvening,history:renderHistory,goal:renderGoal,progress:()=>GoalProgress.render(progressCtx()),sync:renderSync}[tab]();app.innerHTML=content;if(tab==='goal'||tab==='progress')groupSecondaryPanels(app);restoreDisclosures(app,disclosures);document.querySelectorAll('[data-nav]').forEach(b=>{let yes=b.dataset.nav===tab;b.classList.toggle('active',yes);b.setAttribute('aria-current',yes?'page':'false')});document.title=names[tab]+'｜未来の自分';updateAutoSyncNotice();}
   function go(to,date=null){
     const today=jstToday();
     activeDate=date||today;
@@ -1726,7 +1752,7 @@
   window.addEventListener('load',()=>{handleCloudAuthReturn().then(handled=>{if(!handled&&autoSyncEnabled&&cloudWorkerUrl&&cloudSession)restoreCloudSession();else if(autoSyncEnabled)updateAutoSyncNotice();});});
   window.addEventListener('focus',()=>{if(autoSyncEnabled){if(autoWriteToken)autoSyncTick();else if(cloudWorkerUrl&&cloudSession)restoreCloudSession();else updateAutoSyncNotice();}});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&autoSyncEnabled){if(autoWriteToken)autoSyncTick();else if(cloudWorkerUrl&&cloudSession)restoreCloudSession();else updateAutoSyncNotice();}});
-  document.addEventListener('focusout',()=>{if(autoRenderDeferred)setTimeout(()=>{if(backgroundRenderSafe()){autoRenderDeferred=false;render();}},200);});
+  document.addEventListener('focusout',()=>{if(autoRenderDeferred)setTimeout(()=>{if(backgroundRenderSafe()){autoRenderDeferred=false;render({preserveDisclosures:true});}},200);});
   setInterval(()=>{if(autoSyncEnabled){if(autoWriteToken)autoSyncTick();else if(cloudWorkerUrl&&cloudSession)restoreCloudSession();else updateAutoSyncNotice();}},120000);
 })();
 </script>
