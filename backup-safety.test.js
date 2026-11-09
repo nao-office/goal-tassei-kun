@@ -30,7 +30,7 @@ function fixture(extra={}){
   document:{querySelectorAll:()=>[],body:{appendChild:()=>{}},createElement:()=>({click(){downloads.at(-1).name=this.download;downloads.at(-1).clicked=true;},remove(){}})},
   ...extra};
  c.FileReader=extra.FileReader||class{constructor(){readers.push(this);}readAsText(file,encoding){this.file=file;this.encoding=encoding;if(file.throwRead)throw Error('read');if(!file.defer)this.finish();}finish(){this.result=this.file.text;this.onload();}};
- c.window={};vm.createContext(c);vm.runInContext(fs.readFileSync('goal-progress.js','utf8'),c);c.GoalProgress=c.window.GoalProgress;
+ c.window={};vm.createContext(c);vm.runInContext(fs.readFileSync('goal-progress.js','utf8'),c);c.GoalProgress=c.window.GoalProgress;vm.runInContext(fs.readFileSync('archive-tools.js','utf8'),c);c.GoalArchiveTools=c.window.GoalArchiveTools;
  vm.runInContext(inline.match(/  const DEFAULT_LESSONS=.*?;\n/)[0],c);
  vm.runInContext(inline.match(/  const initial=\(\)=>.*?;\n/)[0],c);
  for(const name of ['cleanString','cleanGoalSnapshot','normalize','save'])vm.runInContext(source(name),c);
@@ -187,4 +187,18 @@ test('cleanup failure after a successful restore keeps the durable guard and rep
 test('failed export serialization or download does not claim success and releases created object URLs',()=>{
  const circular=fixture();circular.data.circular=circular.data;assert.equal(circular.exportData(),false);assert.equal(circular.downloads.length,0);assert.match(circular.messages.at(-1),/開始できません/);
  const c=fixture();c.document.createElement=()=>({click(){throw Error('blocked download');},remove(){}});assert.equal(c.exportData(),false);assert.match(c.messages.at(-1),/開始できません/);c.timers.forEach(fn=>fn());assert.deepEqual(c.revoked,['blob:fixture']);assert.equal(c.changes.length,0);
+});
+
+test('archive raw rows survive export, restore, normalization and re-export including partial versions',async()=>{
+ const c=fixture();c.data=c.normalize(simple());
+ const bundles=[{schemaVersion:1,sheetId:'fictional-sheet',fetchedAt:'2026-11-08T00:00:00Z',tabExists:true,rows:[['header'],['partial bytes retained']]}];
+ c.data.syncArchiveBackups=bundles;assert.equal(c.exportData(),true);
+ const json=await c.downloads[0].blob.text();c.restoreBackupFile(fileFor(json));
+ assert.equal(JSON.stringify(c.data.syncArchiveBackups),JSON.stringify(bundles));
+ assert.equal(JSON.stringify(c.normalize(c.data).syncArchiveBackups),JSON.stringify(bundles));
+ assert.equal(c.exportData(),true);assert.equal(JSON.stringify(JSON.parse(await c.downloads[1].blob.text()).syncArchiveBackups),JSON.stringify(bundles));
+});
+test('malformed archive bundle is rejected without replacing current records',()=>{
+ const c=fixture(),record=simple();record.syncArchiveBackups=[{rows:'invalid'}];
+ c.restoreBackupFile(fileFor(JSON.stringify(record)));nonDestructive(c);
 });

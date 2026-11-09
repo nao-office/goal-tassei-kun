@@ -14,7 +14,8 @@ const server=http.createServer((req,res)=>{const p=(req.url==='/'?'/index.html':
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1000}});
-let remoteRows=[structuredClone(W.workHeaders)],delayWrite=false,releaseWrite;
+let remoteRows=[structuredClone(W.workHeaders)],delayWrite=false,releaseWrite,signalWriteStarted;
+const writeStarted=new Promise(resolve=>signalWriteStarted=resolve);
 const row=Array(24).fill('');row[0]=today;for(const [i,k] of Object.entries(W.workFields))row[i]=[7,8,12,22].includes(+i)?'FALSE':(current[k]||'');row[4]='Sheetsの旧行動';remoteRows.push(row);
 const other=Array(24).fill('');other[0]=yesterday;other[11]='前夜の架空の一歩';for(const i of [7,8,12,22])other[i]='FALSE';remoteRows.push(other);
 const initialRows=structuredClone(remoteRows);
@@ -28,7 +29,7 @@ await context.route('**/*',async route=>{
  if(!url.startsWith('https://sheets.googleapis.com/'))return route.abort();
  requests.push({method:req.method(),url});const path=decodeURIComponent(url);
  if(req.method()==='POST'){
-  if(delayWrite)await new Promise(r=>releaseWrite=r);
+  if(delayWrite)await new Promise(r=>{releaseWrite=r;signalWriteStarted();});
   const body=req.postDataJSON();for(const patch of body.data||[]){const m=patch.range.match(/'ワーク記録'!([A-Z])(\d+)/);if(m){remoteRows[+m[2]-1][m[1].charCodeAt(0)-65]=patch.values[0][0];}}
   return route.fulfill({json:{totalUpdatedCells:1}});
  }
@@ -46,6 +47,8 @@ await page.locator('[data-nav="sync"]').click();assert.match(await page.locator(
 await page.locator('[data-action="google-sync"]').click();await page.waitForFunction(()=>document.querySelector('.sync-review-panel'));assert.equal(requests.filter(x=>x.method==='POST').length,0);assert.doesNotMatch(await page.locator('#syncEvidence').innerText(),/送信完了を確認/);
 for(const field of await page.locator('[data-sync-choice][value="device"]').all())await field.check();
 delayWrite=true;await page.locator('[data-action="apply-sync-review"]').click();await page.waitForFunction(()=>document.querySelector('#autoSyncNotice').textContent.includes('送信中（完了未確認）'));
+// UI status is set before fetch reaches the mock. Wait for the actual held POST.
+await Promise.race([writeStarted,new Promise((_,reject)=>setTimeout(()=>reject(Error('Mock write request did not arrive')),10000))]);
 const sheet=page.locator('#sheetId');await sheet.fill('other-spreadsheet-fixture');assert.equal(await sheet.inputValue(),sheetId);assert.ok(releaseWrite);releaseWrite();delayWrite=false;
 await page.waitForFunction(()=>document.querySelector('#syncEvidence').textContent.includes('送信完了を確認'));
 assert.ok(requests.some(x=>x.method==='POST'));assert.equal(remoteRows[1][4],'前夜の架空の一歩');
