@@ -1593,7 +1593,13 @@
     }
   }
   function render(options={}){if(autoSilentSync&&!backgroundRenderSafe()){autoRenderDeferred=true;return;}const app=document.getElementById('app');const disclosures=options.preserveDisclosures?disclosureStates(app):null;let content={home:renderHome,morning:renderMorning,evening:renderEvening,history:renderHistory,goal:renderGoal,progress:()=>GoalProgress.render(progressCtx()),sync:renderSync}[tab]();app.innerHTML=content;if(tab==='goal'||tab==='progress')groupSecondaryPanels(app);restoreDisclosures(app,disclosures);document.querySelectorAll('[data-nav]').forEach(b=>{let yes=b.dataset.nav===tab;b.classList.toggle('active',yes);b.setAttribute('aria-current',yes?'page':'false')});document.title=names[tab]+'｜未来の自分';updateAutoSyncNotice();}
-  function go(to,date=null){followToday=!date||date===jstToday();observedToday=jstToday();if(date)activeDate=date;else if(to==='home'||to==='morning'||to==='evening')activeDate=jstToday();tab=to;render();scrollTo({top:0,behavior:'instant'});}
+  function go(to,date=null){
+    const today=jstToday();
+    activeDate=date||today;
+    followToday=activeDate===today;
+    observedToday=today;
+    tab=to;render();scrollTo({top:0,behavior:'instant'});
+  }
   function showToast(message){if(autoSilentSync&&/同期しました|取り込みました/.test(message))return;const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2800)}
   // Normal backups and imports share a UTF-8 byte limit. Recovery-only downloads
   // preserve every byte of unsupported data, but are never advertised as restorable.
