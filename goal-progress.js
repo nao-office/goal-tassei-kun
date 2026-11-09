@@ -140,7 +140,7 @@ window.GoalProgress = (function () {
       result+='<h4 class="ui-theme">'+html(theme)+'</h4>';
       bucket.filter(a=>(a.theme||'テーマ未設定')===theme).forEach(function(a){
       var g=itemGoal(data.goals||[],a.goalId);
-      result+='<details class="pg-action-card ui-item"><summary><span><strong>'+html(a.title)+'</strong><small>期限：'+html(a.due||'未設定')+' ・ 優先度：'+html(a.priority||'通常')+'</small></span></summary><div class="ui-body">';
+      result+='<details class="pg-action-card ui-item" data-disclosure-key="action:'+html(a.id)+'"><summary><span><strong>'+html(a.title)+'</strong><small>期限：'+html(a.due||'未設定')+' ・ 優先度：'+html(a.priority||'通常')+'</small></span></summary><div class="ui-body">';
       if(g)result+='<div class="smallmuted">🎯 '+html(goalName(g))+'</div>';
       else if(a.goalId)result+='<div class="smallmuted">関連ゴール：次回のGoogle同期で再確認</div>';
       if(a.minimum)result+='<p class="pg-mini"><b>最低限の完了ライン：</b>'+html(a.minimum)+'</p>';

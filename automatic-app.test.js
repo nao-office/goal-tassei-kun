@@ -56,7 +56,7 @@ test('dirty action, review and goal editor controls prevent background render af
  assert.equal(c.backgroundRenderSafe(),true);
  for(const control of [{tagName:'INPUT',value:'draft',defaultValue:''},{tagName:'TEXTAREA',value:'draft',defaultValue:'old'},{tagName:'SELECT',value:'b',options:[{value:'a',defaultSelected:true},{value:'b',defaultSelected:false}]},{tagName:'INPUT',type:'checkbox',checked:true,defaultChecked:false}]){controls=[control];assert.equal(c.backgroundRenderSafe(),false);}
  controls=[{tagName:'SELECT',value:'a',options:[{value:'a',defaultSelected:false},{value:'b',defaultSelected:false}]}];assert.equal(c.backgroundRenderSafe(),true,'pristine implicit first option is not a dirty draft');
- assert.match(inline,/if\(backgroundRenderSafe\(\)\)\{autoRenderDeferred=false;render\(\);\}/);
+ assert.match(inline,/if\(backgroundRenderSafe\(\)\)\{autoRenderDeferred=false;render\(\{preserveDisclosures:true\}\);\}/);
 });
 
 test('main automatic retry button does not switch sync off when its token has expired',()=>{
@@ -64,4 +64,33 @@ test('main automatic retry button does not switch sync off when its token has ex
 });
 test('duplicate source IDs stop with an accurate repair warning rather than promising retry will fix it',async()=>{
  const {c,messages}=commitFixture();c.GoalKeepBoth.commit=async()=>{throw Error('シートに同じID／日付の行が複数あります：2026-11-01');};await c.autoCommit({});assert.equal(c.autoSyncBlocked,true);assert.match(messages.at(-1),/再試行だけでは解消しません/);assert.match(messages.at(-1),/記録は削除していません/);
+});
+
+test('background refresh preserves open and closed disclosures by stable record ID, not changing titles/counts',()=>{
+ function tree(rows){
+  const app={querySelectorAll:()=>folds},folds=[];
+  for(const row of rows){
+   const parent=row.parent==null?app:folds[row.parent];
+   folds.push({tagName:'DETAILS',parentElement:parent,open:row.open,
+    getAttribute:name=>name==='data-disclosure-key'?(row.key||null):null,
+    querySelector:()=>({cloneNode:()=>({textContent:row.label,querySelectorAll:()=>[]})})});
+  }
+  return {app,folds};
+ }
+ const c={Map};vm.createContext(c);vm.runInContext(source('disclosureStates')+source('restoreDisclosures'),c);
+ const old=tree([{label:'未着手',open:true},{parent:0,key:'action:a',label:'old title',open:true},{parent:0,key:'action:b',label:'same title',open:false}]);
+ const saved=c.disclosureStates(old.app);
+ const next=tree([{label:'未着手',open:false},{parent:0,key:'action:b',label:'same title',open:true},{parent:0,key:'action:new',label:'new item',open:false},{parent:0,key:'action:a',label:'new title',open:false}]);
+ c.restoreDisclosures(next.app,saved);
+ assert.deepEqual(next.folds.map(f=>f.open),[true,false,false,true]);
+ assert.deepEqual(old.folds.map(f=>f.open),[true,true,false],'capturing state is read-only');
+ c.restoreDisclosures(next.app,null);
+ assert.deepEqual(next.folds.map(f=>f.open),[true,false,false,true]);
+});
+test('only background refresh opts into disclosure preservation; ordinary navigation uses default rendering',()=>{
+ assert.match(source('autoCommit'),/render\(\{preserveDisclosures:true\}\)/);
+ assert.match(source('render'),/options\.preserveDisclosures\?disclosureStates\(app\):null/);
+ assert.match(source('render'),/restoreDisclosures\(app,disclosures\)/);
+ assert.match(source('go'),/tab=to;render\(\)/);
+ assert.match(fs.readFileSync('goal-progress.js','utf8'),/data-disclosure-key="action:/);
 });

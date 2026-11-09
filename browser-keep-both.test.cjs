@@ -457,6 +457,12 @@ async function makeDevice(name, browser, options, origin, useBaseline) {
   // persist drafts nor rebuild the form and erase them, including after blur.
   await navigate(A, 'progress');
   const editAction = await reveal(A, '[data-progress-action="edit"][data-id="' + ACTION + '"]');
+  // Force a background import after the card has been expanded. Its changing
+  // title must not close the card or hide the Edit button before the click.
+  rows('アクション一覧')[1][3] = '展開中に届いた新しいアクション名';
+  await poll(A); await idle(A);
+  await until(async () => (await data(A)).progress.actions.find(item=>item.id===ACTION).title === rows('アクション一覧')[1][3], 'background action title import');
+  assert.equal(await editAction.isVisible(), true, 'background refresh keeps expanded action editable');
   await editAction.click();
   const actionDraft = '自動取り込みとフォーカス解除を越えて残すアクション';
   await A.locator('#pg-action-form [name="title"]').fill(actionDraft);
