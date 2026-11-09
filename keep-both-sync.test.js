@@ -332,7 +332,7 @@ test('oversized snapshots stop before creating a tab or writing active rows',asy
 test('loadArchive is read-only and never creates a missing tab',async()=>{
   const state=server(rows());
   await using(state,async()=>{
-    assert.deepEqual(await K.loadArchive(ID,'synthetic-token'),{versions:[],partialVersions:[],tabExists:false});
+    assert.deepEqual(await K.loadArchive(ID,'synthetic-token'),{versions:[],partialVersions:[],tabExists:false,rows:[]});
     assert.deepEqual(state.events.map(event=>event.type),['metadata']);
   });
 });

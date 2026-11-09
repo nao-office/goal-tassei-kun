@@ -386,9 +386,10 @@ window.GoalKeepBoth=(function(){
   }
   async function loadArchive(sheetId,token){
     validateCredentials(sheetId,token);
-    if(!await metadata(sheetId,token))return {versions:[],partialVersions:[],tabExists:false};
-    const {versions,partialVersions}=await inspectArchive(await rawArchive(sheetId,token));
-    return {versions,partialVersions,tabExists:true};
+    if(!await metadata(sheetId,token))return {versions:[],partialVersions:[],tabExists:false,rows:[]};
+    const rows=await rawArchive(sheetId,token);
+    const {versions,partialVersions}=await inspectArchive(rows);
+    return {versions,partialVersions,tabExists:true,rows};
   }
   const sameRows=(left,right)=>JSON.stringify(left.workRows)===JSON.stringify(right.workRows)&&JSON.stringify(left.actionRows)===JSON.stringify(right.actionRows);
   function writeIntent(data,live){
@@ -488,5 +489,5 @@ window.GoalKeepBoth=(function(){
     task.then(clear,clear);
     return task;
   }
-  return {schemaVersion,tabName,headers,limits,plan,load,commit,reconcile,loadArchive};
+  return {schemaVersion,tabName,headers,limits,plan,load,commit,reconcile,loadArchive,inspectArchive};
 })();

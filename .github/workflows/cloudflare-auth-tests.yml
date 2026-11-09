@@ -13,6 +13,9 @@ on:
       - 'backup-safety.test.js'
       - 'browser-device-sync.test.cjs'
       - 'keep-both-sync.js'
+      - 'archive-tools.js'
+      - 'archive-tools.test.js'
+      - 'browser-archive.test.cjs'
       - 'keep-both-sync.test.js'
       - 'automatic-app.test.js'
       - 'browser-keep-both.test.cjs'
@@ -39,6 +42,9 @@ on:
       - 'backup-safety.test.js'
       - 'browser-device-sync.test.cjs'
       - 'keep-both-sync.js'
+      - 'archive-tools.js'
+      - 'archive-tools.test.js'
+      - 'browser-archive.test.cjs'
       - 'keep-both-sync.test.js'
       - 'automatic-app.test.js'
       - 'browser-keep-both.test.cjs'
@@ -60,7 +66,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test OAuth and synchronization safety
-        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js archive-tools.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -95,6 +101,8 @@ jobs:
         run: node browser-device-sync.test.cjs
       - name: Test automatic keep-both sync with mocked Sheets only
         run: node browser-keep-both.test.cjs
+      - name: Test archive backup and copy with synthetic data only
+        run: node browser-archive.test.cjs
       - name: Save browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
