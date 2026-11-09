@@ -1173,6 +1173,9 @@
     if(!/^[A-Za-z0-9_-]{20,}$/.test(sheetId)){syncStatusMessage('先にGoogle連携画面でスプレッドシートIDを入力してください');return;}
     if(!googleToken){syncStatusMessage('先にGoogleへ接続してください');return;}
     syncBusy=true;syncReview=null;syncReviewChoices={};goalReviewChoices={};
+    // Remove the previous review immediately. Its still-visible controls could
+    // otherwise be clicked while the replacement read is pending and ignored.
+    render();
     syncStatusMessage('Google Sheetsのワーク記録とアクション一覧を読み取り中です…');
     try{
       const [rows,goalRows]=await Promise.all([

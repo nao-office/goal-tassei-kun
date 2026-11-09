@@ -9,12 +9,29 @@ const W=modules.window.GoalWriteback,G=modules.window.GoalManagementSync;
 const values={valuableAction:'共有済みの行動',minimumAction:'共有済みの最低ライン'};
 const row=Array(24).fill('');row[0]=today;for(const [index,key] of Object.entries(W.workFields))row[index]=[7,8,12,22].includes(+index)?'FALSE':values[key]||'';
 let workRows=[structuredClone(W.workHeaders),row],failNextWrite=false;
+let holdNextRead=false,releaseHeldRead,signalHeldRead;
 const baseline=W.baselineFromRows(workRows,[W.actionHeaders]),requests=[],checks=[],errors=[],browsers=[];
 const server=http.createServer((req,res)=>{const p=(req.url==='/'?'/index.html':req.url).split('?')[0];try{res.setHeader('Content-Type',p.endsWith('.js')?'application/javascript':p.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(root+p));}catch{res.writeHead(404);res.end();}});
 async function stored(page){return page.evaluate(k=>localStorage.getItem(k),KEY);}
 async function value(page,key){return JSON.parse(await stored(page)).entries[today][key];}
 async function edit(page,key,text){await page.locator('[data-nav="'+(['achievement','growth','tomorrow'].includes(key)?'evening':'morning')+'"]').click();await page.locator('#'+key).fill(text);assert.equal(await value(page,key),text);}
-async function compare(page){await page.locator('[data-nav="sync"]').click();const before=await stored(page),postCount=requests.filter(x=>x.method==='POST').length;await page.locator('[data-action="google-sync"]').click();await page.locator('.sync-review-panel').first().waitFor();assert.equal(await stored(page),before);assert.equal(requests.filter(x=>x.method==='POST').length,postCount);}
+async function compare(page,slowRefresh=false){
+ await page.locator('[data-nav="sync"]').click();
+ const before=await stored(page),postCount=requests.filter(x=>x.method==='POST').length;
+ let held;
+ if(slowRefresh){holdNextRead=true;held=new Promise(resolve=>{signalHeldRead=resolve;});}
+ await page.locator('[data-action="google-sync"]').click();
+ if(slowRefresh){
+  await Promise.race([held,new Promise((_,reject)=>setTimeout(()=>reject(Error('mock read was not reached')),5000))]);
+  try{
+   assert.equal(await page.locator('.sync-review-panel').count(),0,'old review must be removed during a replacement read');
+   assert.match(await page.locator('#syncStatus').innerText(),/読み取り中/);
+  }finally{releaseHeldRead();}
+ }
+ await page.waitForFunction(()=>document.querySelector('#syncStatus')?.textContent.startsWith('差分を表示しました。'));
+ await page.locator('.sync-review-panel').first().waitFor();
+ assert.equal(await stored(page),before);assert.equal(requests.filter(x=>x.method==='POST').length,postCount);
+}
 async function choose(page,choice){const fields=page.locator('[data-sync-choice][value="'+choice+'"]');const count=await fields.count();assert.ok(count>0,'Expected an explicit difference');for(let i=0;i<count;i++)await fields.nth(i).check();}
 async function apply(page){await page.locator('[data-action="apply-sync-review"]').click();await page.waitForFunction(()=>!document.querySelector('[data-action="apply-sync-review"]')||document.querySelector('#syncStatus')?.textContent.includes('同期を停止しました'));}
 async function makeDevice(name,browser,options,origin){
@@ -27,6 +44,7 @@ async function makeDevice(name,browser,options,origin){
   const req=route.request(),url=req.url();if(url.startsWith(origin+'/'))return route.continue();
   if(!url.startsWith('https://sheets.googleapis.com/'))return route.abort();
   requests.push({device:name,method:req.method()});const path=decodeURIComponent(url);
+  if(req.method()==='GET'&&holdNextRead){holdNextRead=false;await new Promise(resolve=>{releaseHeldRead=resolve;signalHeldRead();});}
   if(req.method()==='POST'){
    if(failNextWrite){failNextWrite=false;return route.fulfill({status:500,json:{error:{message:'synthetic failed write'}}});}
    let count=0;for(const patch of req.postDataJSON().data||[]){const m=patch.range.match(/^'ワーク記録'!([A-X])(\d+)$/);assert.ok(m,'Only expected work-cell writes allowed: '+patch.range);const r=+m[2]-1,c=m[1].charCodeAt(0)-65;assert.ok(workRows[r]);workRows[r][c]=patch.values[0][0];count++;}
@@ -49,7 +67,7 @@ async function makeDevice(name,browser,options,origin){
  await edit(A,'fit','PC側の競合入力');await edit(B,'fit','モバイル側の競合入力');await compare(B);await choose(B,'device');await apply(B);await compare(A);assert.match(await A.locator('.sync-review-panel').first().innerText(),/競合/);const postsBeforeDefer=requests.filter(x=>x.method==='POST').length;await choose(A,'defer');await A.locator('[data-action="apply-sync-review"]').click();assert.match(await A.locator('#syncStatus').innerText(),/未選択/);assert.equal(requests.filter(x=>x.method==='POST').length,postsBeforeDefer);assert.equal(await value(A,'fit'),'PC側の競合入力');checks.push('conflicts defer without losing either value');
  await A.locator('[data-action="cancel-sync-review"]').first().click();assert.equal(await value(A,'fit'),'PC側の競合入力');await compare(A);await choose(A,'sheets');await apply(A);assert.equal(await value(A,'fit'),'モバイル側の競合入力');checks.push('cancel and explicit conflict resolution');
  await edit(A,'growth','送信失敗後も残す内容');await compare(A);await choose(A,'device');failNextWrite=true;await apply(A);assert.match(await A.locator('#syncStatus').innerText(),/同期を停止しました/);assert.equal(workRows[1][10],'');assert.equal(await value(A,'growth'),'送信失敗後も残す内容');assert.match(await A.locator('#syncEvidence').innerText(),/未完了・結果未確認/);checks.push('failed write retains local content');
- await compare(A);await choose(A,'device');await apply(A);assert.equal(workRows[1][10],'送信失敗後も残す内容');checks.push('failed write retry');
+ await compare(A,true);await choose(A,'device');await apply(A);assert.equal(workRows[1][10],'送信失敗後も残す内容');checks.push('failed write retry waits for a fresh review and removes stale controls');
  await compare(B);const beforeConflict=await stored(B);await choose(B,'sheets');workRows[1][10]='比較後に変わったSheets側の値';const postsBeforeStale=requests.filter(x=>x.method==='POST').length;await apply(B);assert.match(await B.locator('#syncStatus').innerText(),/同期を停止しました/);assert.equal(await stored(B),beforeConflict);assert.equal(requests.filter(x=>x.method==='POST').length,postsBeforeStale);checks.push('stale remote review stops before write');
  await B.reload();await B.locator('[data-nav="sync"]').click();assert.match(await B.locator('#syncEvidence').innerText(),/未確認/);assert.doesNotMatch(await B.locator('#syncEvidence').innerText(),/送信完了を確認/);checks.push('reload clears send evidence');
  assert.deepEqual(errors,[]);fs.mkdirSync(root+'/test-results',{recursive:true});await A.screenshot({path:root+'/test-results/device-sync-PC.png',fullPage:true});await B.screenshot({path:root+'/test-results/device-sync-mobile-webkit.png',fullPage:true});
