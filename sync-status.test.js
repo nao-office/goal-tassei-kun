@@ -13,12 +13,12 @@ function source(name){
 const sheetId='fixture-spreadsheet-123456';
 function fixture(extra={}){
  const notice={innerHTML:'',querySelector:()=>({open:true})},panel={innerHTML:''};
- const c={syncConfig:{sheetId,lastSync:'2026-11-03T00:00:00Z',lastMethod:'CSV'},syncDisplayEvidence:{sheetId:'',work:{},goals:{}},localSaveEvidence:'',storageError:false,syncStatusText:'',
+ const c={tab:'sync',syncReview:null,goalReviewChoices:{},syncReviewSequence:0,syncDetailsOpen:true,autoSyncTick:()=>{},syncConfig:{sheetId,lastSync:'2026-11-03T00:00:00Z',lastMethod:'CSV'},syncDisplayEvidence:{sheetId:'',work:{},goals:{}},localSaveEvidence:'',storageError:false,syncStatusText:'',
   writeBaseline:null,autoSyncEnabled:false,autoSyncBlocked:false,autoWriteToken:false,autoTokenExpiresAt:0,googleToken:'',autoAuthBusy:false,syncAuthBusy:false,writeBusy:false,syncBusy:false,autoSyncTickBusy:false,
   navigator:{onLine:true},document:{getElementById:id=>id==='autoSyncNotice'?notice:id==='syncEvidence'?panel:null,querySelectorAll:()=>[]},autoPending:()=>0,
   showToast:()=>{},button:(label,action)=>`<button data-action="${action}">${label}</button>`,...extra};
  vm.createContext(c);
- for(const name of ['txt','esc','syncDisplayForSheet','recordSyncCheck','recordSyncCheckFailure','startSyncSend','finishSyncSend','failSyncSend','syncEvidenceTime','syncEvidenceLines','updateAutoSyncNotice'])vm.runInContext(source(name),c);
+ for(const name of ['clearManualSyncReview','manualSyncReviewVisible','txt','esc','syncDisplayForSheet','recordSyncCheck','recordSyncCheckFailure','startSyncSend','finishSyncSend','failSyncSend','syncEvidenceTime','syncEvidenceLines','updateAutoSyncNotice'])vm.runInContext(source(name),c);
  c.notice=notice;c.panel=panel;return c;
 }
 test('no timestamps, CSV/imports, connection or empty pending count imply Sheets sent',()=>{
@@ -83,18 +83,18 @@ test('successful remote send plus baseline-storage failure stays distinct from f
  const c=automaticFixture({count:1,workRows:[],actionRows:[]});c.saveWriteBaseline=()=>false;await c.autoCommit({});
  assert.equal(c.autoSyncBlocked,true);assert.match(c.syncEvidenceLines()[1],/送信完了を確認/);assert.doesNotMatch(c.syncEvidenceLines()[1],/直近の送信処理は未完了/);
 });
-test('read-only review integration records both comparisons without modifying data or writing Sheets',async()=>{
+test('goal and recovery comparisons are independent read-only operations',async()=>{
  const rows={workRows:[],actionRows:[]},goalRows={goals:[],history:[],checks:[],ideas:[]};
  const c=fixture({googleToken:'test',syncAuthBusy:false,data:{entries:{fixture:{valuableAction:'keep'}}},goalSyncBaseline:null,
   GoalWriteback:{load:async()=>rows,preview:()=>[],baselineFromRows:()=>({version:1,work:{},actions:{}})},
   GoalManagementSync:{load:async()=>goalRows,preview:()=>({goals:[],ideas:[]}),baselineFromRows:x=>({version:1,...x})},render:()=>{},syncStatusMessage:()=>{}});
- vm.runInContext(source('fetchSheetRows'),c);const before=JSON.stringify(c.data);await c.fetchSheetRows();assert.equal(JSON.stringify(c.data),before);assert.equal(c.syncBusy,false);assert.ok(c.syncDisplayEvidence.work.checkedAt);assert.ok(c.syncDisplayEvidence.goals.checkedAt);assert.doesNotMatch(c.syncEvidenceLines()[1],/送信完了を確認/);
+ vm.runInContext(source('fetchSheetRows'),c);const before=JSON.stringify(c.data);await c.fetchSheetRows();assert.equal(JSON.stringify(c.data),before);assert.equal(c.syncBusy,false);assert.ok(c.syncDisplayEvidence.work.checkedAt);assert.equal(c.syncDisplayEvidence.goals.checkedAt,undefined);await c.fetchSheetRows('goals');assert.ok(c.syncDisplayEvidence.goals.checkedAt);assert.equal(c.syncReview.rows,undefined);assert.doesNotMatch(c.syncEvidenceLines()[1],/送信完了を確認/);
  c.GoalWriteback.load=async()=>{throw Error('offline');};await c.fetchSheetRows();assert.match(c.syncEvidenceLines()[2],/直近の確認に失敗/);
 });
 test('UI describes real manual goal seed sync and current buttons without obsolete instructions',()=>{
- assert.match(html,/⑤ ゴールの種（手動同期・CSV追加）/);assert.match(html,/ゴールの種は「差分を確認（読み取りのみ）」で比較/);
+ assert.match(html,/⑤ ゴールの種（手動同期・CSV追加）/);assert.match(html,/ゴールの種は上の「ゴールを同期」で比較/);
  assert.doesNotMatch(html,/ゴールの種は安全同期の対象外|Googleに接続して同期|Google Sheetsに保存して同期/);
- assert.match(html,/この差分欄で同期する範囲/);assert.match(html,/別の「ゴール管理」の差分欄で手動同期/);
+ assert.match(html,/この差分欄で同期する範囲/);assert.match(html,/「ゴールを同期」から別に手動同期/);
 });
 test('send-in-progress replaces previous success before a deferred request completes',async()=>{
  const c=automaticFixture({count:1,workRows:[],actionRows:[]});c.autoTokenExpiresAt=Date.now()+60000;
@@ -138,11 +138,11 @@ test('a pending comparison removes stale review controls before its asynchronous
  const pending=new Promise(resolve=>{release=resolve;});
  const renders=[],messages=[];
  const original={entries:{'2026-11-09':{fit:'keep local'}}};
- const c={syncBusy:false,syncAuthBusy:false,autoAuthBusy:false,writeBusy:false,autoSyncTickBusy:false,
+ const c={tab:'sync',syncReviewSequence:0,syncDetailsOpen:true,autoSyncTick:()=>{},syncBusy:false,syncAuthBusy:false,autoAuthBusy:false,writeBusy:false,autoSyncTickBusy:false,
   syncConfig:{sheetId:'fixture-spreadsheet-123456'},txt:s=>s,googleToken:'synthetic',syncReview:{old:true},syncReviewChoices:{old:'device'},goalReviewChoices:{old:'device'},
   data:original,writeBaseline:null,goalSyncBaseline:null,render:()=>renders.push(c.syncReview),syncStatusMessage:s=>messages.push(s),updateAutoSyncNotice:()=>{},recordSyncCheck:()=>{},recordSyncCheckFailure:()=>{},
   GoalWriteback:{load:()=>pending,preview:()=>[],baselineFromRows:()=>({})},GoalManagementSync:{load:async()=>({}),preview:()=>[],baselineFromRows:()=>({})}};
- vm.createContext(c);vm.runInContext(source('fetchSheetRows'),c);
+ vm.createContext(c);vm.runInContext(source('clearManualSyncReview')+source('fetchSheetRows'),c);
  const running=c.fetchSheetRows();
  assert.equal(c.syncBusy,true);
  assert.equal(renders.length,1,'old review is removed before any response arrives');
@@ -151,4 +151,42 @@ test('a pending comparison removes stale review controls before its asynchronous
  release({workRows:[],actionRows:[]});await running;
  assert.equal(c.syncBusy,false);assert.equal(renders.length,2);assert.ok(c.syncReview);
  assert.match(messages.at(-1),/差分を表示しました/);assert.equal(c.data,original);
+});
+
+test('leaving during a manual read discards its delayed result without hidden review or render',async()=>{
+ for(const scope of ['goals','recovery']){
+  let release,renders=0,ticks=0;
+  const pending=new Promise(resolve=>release=resolve);
+  const c=fixture({googleToken:'synthetic',data:{},goalSyncBaseline:null,render:()=>renders++,syncStatusMessage:()=>{},autoSyncTick:()=>ticks++,
+   GoalManagementSync:{load:()=>pending},GoalWriteback:{load:()=>pending}});
+  vm.runInContext(source('fetchSheetRows'),c);
+  const run=c.fetchSheetRows(scope);assert.equal(c.syncBusy,true);assert.equal(renders,1);
+  c.tab='morning';c.clearManualSyncReview();release({});await run;
+  assert.equal(c.syncReview,null);assert.equal(c.syncBusy,false);assert.equal(renders,1);assert.equal(ticks,1);
+ }
+});
+test('canceling goal save during authentication prevents every remote write',async()=>{
+ let onConnected,commits=0,ticks=0;
+ const data={goals:[{id:'local'}]},review={sheetId,localSnapshot:JSON.stringify(data),goalRows:{},goalGroups:{}};
+ const c=fixture({data,syncReview:review,goalReviewChoices:{'goal:local':'device'},autoSyncTick:()=>ticks++,render:()=>{},syncStatusMessage:()=>{},
+  requestGoalWriteAccess:fn=>{onConnected=fn;},GoalManagementSync:{writePlan:()=>({destructive:[],goals:[{}],ideas:[],history:[{}],checks:[]}),commit:async()=>commits++}});
+ vm.runInContext(source('saveGoalManagementChanges'),c);
+ await c.saveGoalManagementChanges();assert.equal(typeof onConnected,'function');c.clearManualSyncReview();await onConnected();
+ assert.equal(commits,0);assert.equal(ticks,1);assert.equal(c.data,data);
+});
+test('goal import canceled during recheck leaves local data and baseline unchanged',async()=>{
+ let release,applied=0;const pending=new Promise(resolve=>release=resolve);
+ const data={goals:[{id:'local'}]},review={sheetId,localSnapshot:JSON.stringify(data),goalRows:{},goalGroups:{}};
+ const c=fixture({data,syncReview:review,goalSyncBaseline:{old:true},goalReviewChoices:{},render:()=>{},syncStatusMessage:()=>{},
+  GoalManagementSync:{load:()=>pending,applyRemote:()=>applied++}});
+ vm.runInContext(source('importGoalManagementData'),c);const run=c.importGoalManagementData();c.clearManualSyncReview();release({});await run;
+ assert.equal(applied,0);assert.equal(c.data,data);assert.equal(c.goalSyncBaseline.old,true);
+});
+
+test('a changed remote goal refreshes the goal review before automatic polling resumes',async()=>{
+ let refreshes=0,ticks=0;const data={goals:[]},review={sheetId,localSnapshot:JSON.stringify(data),goalRows:{old:true},goalGroups:{}};
+ const c=fixture({data,syncReview:review,goalSyncBaseline:null,goalReviewChoices:{},render:()=>{},syncStatusMessage:()=>{},
+  autoSyncTick:()=>{ticks++;c.autoSyncTickBusy=true;},fetchSheetRows:async scope=>{assert.equal(scope,'goals');assert.equal(c.autoSyncTickBusy,false);refreshes++;},
+  GoalManagementSync:{load:async()=>({new:true}),baselineFromRows:()=>({})}});
+ vm.runInContext(source('importGoalManagementData'),c);await c.importGoalManagementData();assert.equal(refreshes,1);assert.equal(ticks,0);
 });

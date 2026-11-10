@@ -17,6 +17,7 @@ async function value(page,key){return JSON.parse(await stored(page)).entries[tod
 async function edit(page,key,text){await page.locator('[data-nav="'+(['achievement','growth','tomorrow'].includes(key)?'evening':'morning')+'"]').click();await page.locator('#'+key).fill(text);assert.equal(await value(page,key),text);}
 async function compare(page,slowRefresh=false){
  await page.locator('[data-nav="sync"]').click();
+ if(!await page.locator('#syncAdvanced').evaluate(el=>el.open))await page.locator('#syncAdvanced > summary').click();
  const before=await stored(page),postCount=requests.filter(x=>x.method==='POST').length;
  let held;
  if(slowRefresh){holdNextRead=true;held=new Promise(resolve=>{signalHeldRead=resolve;});}
@@ -69,7 +70,7 @@ async function makeDevice(name,browser,options,origin){
  await edit(A,'growth','送信失敗後も残す内容');await compare(A);await choose(A,'device');failNextWrite=true;await apply(A);assert.match(await A.locator('#syncStatus').innerText(),/同期を停止しました/);assert.equal(workRows[1][10],'');assert.equal(await value(A,'growth'),'送信失敗後も残す内容');assert.match(await A.locator('#syncEvidence').innerText(),/未完了・結果未確認/);checks.push('failed write retains local content');
  await compare(A,true);await choose(A,'device');await apply(A);assert.equal(workRows[1][10],'送信失敗後も残す内容');checks.push('failed write retry waits for a fresh review and removes stale controls');
  await compare(B);const beforeConflict=await stored(B);await choose(B,'sheets');workRows[1][10]='比較後に変わったSheets側の値';const postsBeforeStale=requests.filter(x=>x.method==='POST').length;await apply(B);assert.match(await B.locator('#syncStatus').innerText(),/同期を停止しました/);assert.equal(await stored(B),beforeConflict);assert.equal(requests.filter(x=>x.method==='POST').length,postsBeforeStale);checks.push('stale remote review stops before write');
- await B.reload();await B.locator('[data-nav="sync"]').click();assert.match(await B.locator('#syncEvidence').innerText(),/未確認/);assert.doesNotMatch(await B.locator('#syncEvidence').innerText(),/送信完了を確認/);checks.push('reload clears send evidence');
+ await B.reload();await B.locator('[data-nav="sync"]').click();await B.locator('#syncAdvanced > summary').click();assert.match(await B.locator('#syncEvidence').innerText(),/未確認/);assert.doesNotMatch(await B.locator('#syncEvidence').innerText(),/送信完了を確認/);checks.push('reload clears send evidence');
  assert.deepEqual(errors,[]);fs.mkdirSync(root+'/test-results',{recursive:true});await A.screenshot({path:root+'/test-results/device-sync-PC.png',fullPage:true});await B.screenshot({path:root+'/test-results/device-sync-mobile-webkit.png',fullPage:true});
  console.log(JSON.stringify({passed:true,browsers:['desktop Chromium','iPhone 13 viewport on '+(process.env.MOBILE_BROWSER==='chromium'?'Chromium':'Linux WebKit')+' (not real iPhone)'],checks,requests:requests.length,posts:requests.filter(x=>x.method==='POST').length,realGoogleRequests:0},null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await Promise.all(browsers.map(browser=>browser.close()));server.close();});

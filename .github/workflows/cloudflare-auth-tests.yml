@@ -12,6 +12,7 @@ on:
       - 'save-failure.test.js'
       - 'backup-safety.test.js'
       - 'browser-device-sync.test.cjs'
+      - 'browser-sync-navigation.test.cjs'
       - 'keep-both-sync.js'
       - 'archive-tools.js'
       - 'archive-tools.test.js'
@@ -41,6 +42,7 @@ on:
       - 'save-failure.test.js'
       - 'backup-safety.test.js'
       - 'browser-device-sync.test.cjs'
+      - 'browser-sync-navigation.test.cjs'
       - 'keep-both-sync.js'
       - 'archive-tools.js'
       - 'archive-tools.test.js'
@@ -101,6 +103,8 @@ jobs:
         run: node browser-device-sync.test.cjs
       - name: Test automatic keep-both sync with mocked Sheets only
         run: node browser-keep-both.test.cjs
+      - name: Test goal sync and review navigation with mocked services only
+        run: node browser-sync-navigation.test.cjs
       - name: Test archive backup and copy with synthetic data only
         run: node browser-archive.test.cjs
       - name: Save browser screenshots
