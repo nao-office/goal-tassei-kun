@@ -10,6 +10,8 @@ on:
       - 'morning-flow.test.js'
       - 'sync-status.test.js'
       - 'save-failure.test.js'
+      - 'lesson-csv.test.js'
+      - 'browser-lesson-csv.test.cjs'
       - 'backup-safety.test.js'
       - 'browser-device-sync.test.cjs'
       - 'keep-both-sync.js'
@@ -39,6 +41,8 @@ on:
       - 'morning-flow.test.js'
       - 'sync-status.test.js'
       - 'save-failure.test.js'
+      - 'lesson-csv.test.js'
+      - 'browser-lesson-csv.test.cjs'
       - 'backup-safety.test.js'
       - 'browser-device-sync.test.cjs'
       - 'keep-both-sync.js'
@@ -66,7 +70,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test OAuth and synchronization safety
-        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js archive-tools.test.js
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js archive-tools.test.js lesson-csv.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -103,6 +107,8 @@ jobs:
         run: node browser-keep-both.test.cjs
       - name: Test archive backup and copy with synthetic data only
         run: node browser-archive.test.cjs
+      - name: Test lesson CSV import safety with synthetic data only
+        run: node browser-lesson-csv.test.cjs
       - name: Save browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
