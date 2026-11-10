@@ -35,10 +35,10 @@ test('401 gives a clear re-login instruction without exposing response secrets',
   assert.doesNotMatch(message,/access_token|refresh_token|Bearer|secret/i);
 });
 
-test('Google connection screen includes the re-login action and explicit read-only next step',()=>{
+test('Google connection screen includes the re-login action and explicit choice after login',()=>{
   const html=fs.readFileSync('index.html','utf8');
   assert.match(html,/Googleに再ログイン/);
-  assert.match(html,/まず差分を確認できます/);
+  assert.match(html,/再ログイン後も自動連係は停止したまま/);
   assert.match(html,/relogin-google/);
 });
 

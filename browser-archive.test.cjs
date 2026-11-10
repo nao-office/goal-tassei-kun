@@ -36,7 +36,7 @@ const server=http.createServer((req,res)=>{try{const p=req.url.split('?')[0];let
    });
    await context.addInitScript(({KEY,fixture})=>{if(!localStorage.getItem(KEY))localStorage.setItem(KEY,JSON.stringify(fixture));},{KEY,fixture});
    const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
-   await page.goto(origin);await page.locator('[data-action="go-sync"]').first().click();
+   await page.goto(origin);await page.locator('[data-action="go-sync"]').first().click();await page.locator('#syncAdvanced > summary').click();
    await page.locator('[data-action="open-restored-archive"]').click();
    // Partial records are not offered for editing.
    await page.waitForFunction(()=>document.querySelectorAll('[data-action="copy-sync-archive"]').length===2);

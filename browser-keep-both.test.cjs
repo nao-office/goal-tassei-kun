@@ -344,6 +344,7 @@ async function makeDevice(name, browser, options, origin, useBaseline) {
   check('true two-device conflict preserves verifiable device and Sheets versions without manual choices');
 
   const beforeArchiveRead = {local:await data(A), main:mutations().length, archive:structuredClone(archive())};
+  if(!await A.locator('#syncAdvanced').evaluate(el=>el.open))await A.locator('#syncAdvanced > summary').click();
   await A.locator('[data-action="read-sync-archive"]').click();
   await until(async () => /別記録を読み取りました/.test(await A.locator('#syncStatus').innerText()), 'saved versions are accessible in the archive viewer');
   const archivePanel = A.locator('section.form-panel').filter({has:A.locator('[data-action="read-sync-archive"]')});

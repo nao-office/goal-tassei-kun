@@ -4,19 +4,24 @@ function source(name){const m=new RegExp('  (?:async )?function '+name+'\\(').ex
 function fixture(extra={}){
  const rows={workRows:[['fixture']],actionRows:[]};
  const c={storageError:false,autoSyncEnabled:true,backupRestoreSyncGuard:false,autoSyncBlocked:false,syncReview:null,syncBusy:false,syncAuthBusy:false,autoAuthBusy:false,writeBusy:false,autoSyncTickBusy:false,
-  document:{hidden:false},autoRetryAfter:0,syncConfig:{sheetId:'fixture-sheet-id-20261107'},autoWriteToken:true,googleToken:'synthetic',googleTokenWritable:true,autoTokenExpiresAt:Date.now()+60000,
+  syncReviewSequence:0,render:()=>{},tab:'sync',document:{hidden:false,getElementById:()=>({open:true})},autoRetryAfter:0,syncConfig:{sheetId:'fixture-sheet-id-20261107'},autoWriteToken:true,googleToken:'synthetic',googleTokenWritable:true,autoTokenExpiresAt:Date.now()+60000,
   cloudWorkerUrl:'',cloudSession:'',writeBaseline:{version:1,work:{},actions:{}},txt:s=>String(s||'').trim(),updateAutoSyncNotice:()=>{},recordSyncCheck:()=>{},recordSyncCheckFailure:()=>{},autoPending:()=>0,
   autoCommit:async()=>{},syncStatusMessage:()=>{},GoalKeepBoth:{load:async()=>rows},GoalWriteback:{baselineFromRows:()=>({version:1,work:{},actions:{}}),preview:()=>[{values:[{status:'両方で変更（競合）'}]}]},...extra};
- vm.createContext(c);return c;
+ vm.createContext(c);vm.runInContext(source('manualSyncReviewVisible')+source('clearManualSyncReview'),c);return c;
 }
 test('automatic tick handles remote changes and conflicts without a manual review gate',async()=>{
  let calls=0;const c=fixture({data:{},autoCommit:async rows=>{calls++;assert.ok(rows.workRows);}});vm.runInContext(source('autoSyncTick'),c);
  await c.autoSyncTick();assert.equal(calls,1);assert.equal(c.autoSyncBlocked,false);assert.equal(c.autoSyncTickBusy,false);
  c.writeBaseline=null;await c.autoSyncTick();assert.equal(calls,2,'initial no-baseline sync also runs keep-both');
 });
-test('automatic tick pauses for optional manual review, restore guard, local failure and other busy work',async()=>{
+test('automatic tick pauses for visible manual review, restore guard, local failure and other busy work',async()=>{
  for(const state of [{syncReview:{}},{backupRestoreSyncGuard:true},{storageError:true},{autoSyncBlocked:true},{syncBusy:true},{document:{hidden:true}}]){
   let reads=0;const c=fixture({...state,GoalKeepBoth:{load:async()=>reads++}});vm.runInContext(source('autoSyncTick'),c);await c.autoSyncTick();assert.equal(reads,0);
+ }
+});
+test('hidden or abandoned manual reviews never block automatic sync',async()=>{
+ for(const props of [{tab:'home',syncReview:{scope:'goals'}},{tab:'home',syncReview:{scope:'recovery'}},{tab:'sync',syncReview:{scope:'recovery'},document:{hidden:false,getElementById:()=>({open:false})}}]){
+  let commits=0;const c=fixture({...props,data:{},autoCommit:async()=>commits++});vm.runInContext(source('autoSyncTick'),c);await c.autoSyncTick();assert.equal(commits,1);
  }
 });
 test('remote-read failure is an error and does not claim a conflict or a completed sync',async()=>{
@@ -93,4 +98,16 @@ test('only background refresh opts into disclosure preservation; ordinary naviga
  assert.match(source('render'),/restoreDisclosures\(app,disclosures\)/);
  assert.match(source('go'),/tab=to;render\(\)/);
  assert.match(fs.readFileSync('goal-progress.js','utf8'),/data-disclosure-key="action:/);
+});
+
+test('successful Cloud login establishes a session without opening any review or reading Sheets',async()=>{
+ let fetches=[],saved='',renders=0;
+ const c=fixture({tab:'home',URLSearchParams,location:{hash:'#goal_auth_ticket=synthetic-ticket',pathname:'/',search:''},history:{replaceState:()=>{}},cloudWorkerUrl:'https://auth.example',
+  cloudSession:'',autoSyncEnabled:true,googleToken:'old',syncReview:{old:true},syncReviewChoices:{old:'device'},goalReviewChoices:{},
+  localStorage:{},CLOUD_SESSION_KEY:'session',AUTO_SYNC_KEY:'auto',AUTO_ENABLE_AFTER_REVIEW_KEY:'pending',
+  GoalCloudAuth:{saveSession:(_storage,_keys,value)=>saved=value},showToast:()=>{},render:()=>renders++,
+  fetch:async url=>{fetches.push(url);return {ok:true,json:async()=>({session:'s'.repeat(43)})};}});
+ vm.runInContext(source('handleCloudAuthReturn'),c);assert.equal(await c.handleCloudAuthReturn(),true);
+ assert.deepEqual(fetches,['https://auth.example/auth/finish']);assert.equal(saved,'s'.repeat(43));assert.equal(c.syncReview,null);
+ assert.equal(c.autoSyncEnabled,false);assert.equal(c.googleToken,'');assert.equal(renders,0);
 });
