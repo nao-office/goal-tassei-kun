@@ -14,6 +14,7 @@
 <script src="archive-tools.js"></script>
   <script src="goal-management-sync.js"></script>
   <script src="cloud-auth.js"></script>
+  <script src="tab-storage.js"></script>
   <style>
     :root{color-scheme:light;--ink:#1c2e37;--deep:#162a37;--muted:#667986;--line:#e5ebee;--bg:#f6f8f7;--white:#fff;--mint:#c1eddb;--green:#21745a;--pale:#eaf6ef;--orange:#f8e5d0;--danger:#a94743;--shadow:0 10px 38px rgba(33,54,60,.06)}
     *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;color:var(--ink);line-height:1.65;min-height:100vh}
@@ -218,10 +219,11 @@
     });
     return base;
   }
-  function load(){try{const s=localStorage.getItem(KEY);const loaded=s?normalize(JSON.parse(s)):initial();localSaveEvidence=s?'loaded':'';return loaded;}catch(err){storageError=true;return initial()}}
+  let tabGuard=null,tabGuardError='',loadedTabRaw=null;
+  function load(){try{const s=localStorage.getItem(KEY);loadedTabRaw=s;const loaded=s?normalize(JSON.parse(s)):initial();localSaveEvidence=s?'loaded':'';return loaded;}catch(err){storageError=true;return initial()}}
   function save(){
-    try{localStorage.setItem(KEY,JSON.stringify(data));}
-    catch(err){storageError=true;updateAutoSyncNotice();showToast('端末に保存できません。入力はこの画面に残っています。ページを閉じず、保存を再試行するかJSONで書き出してください。');return false;}
+    try{if(typeof tabGuard!=='undefined'&&tabGuard)tabGuard.write(data);else localStorage.setItem(KEY,JSON.stringify(data));}
+    catch(err){if(err.code==='TAB_CHANGED'){updateAutoSyncNotice();showToast(err.message);return false;}storageError=true;updateAutoSyncNotice();showToast('端末に保存できません。入力はこの画面に残っています。ページを閉じず、保存を再試行するかJSONで書き出してください。');return false;}
     storageError=false;localSaveEvidence='saved';
     document.querySelectorAll('.storage-warning').forEach(el=>el.remove());
     updateAutoSyncNotice();return true;
@@ -249,7 +251,7 @@
     <div class="lesson-card"><div class="lesson-label">${esc(l.day)} · TODAY'S LEARNING</div><h3 class="lesson-title">${esc(l.title)}</h3><div class="lesson-label">今日の問い</div><p class="lesson-question">${esc(l.question)}</p><div class="lesson-summary"><b>学びの要点</b><div>${esc(l.summary)}</div><div style="margin-top:10px"><b>今日の実践例</b><div>${esc(l.action)}</div></div></div><p class="lesson-source">出典：${esc(l.source)} ${l.url?`<a href="${esc(l.url)}" class="external" target="_blank" rel="noopener noreferrer">元の投稿 ↗</a>`:''}</p></div>
     <div class="field" style="margin-top:20px"><label for="lessonReflection">この学びを今日の自分に当てはめると、どんな気づきがある？</label><p class="hint">頭の中だけで終わらせず、1行でも言葉にしてみよう。</p><textarea id="lessonReflection" data-entry="lessonReflection" rows="3" maxlength="4000" placeholder="今日の気づきを書く">${esc(e.lessonReflection||'')}</textarea></div>
     <div class="field"><label for="lessonNextStep">明日、この学びをどう実践する？</label><textarea id="lessonNextStep" data-entry="lessonNextStep" rows="2" maxlength="4000" placeholder="例：迷ったら、未来の自分なら何をするか問い直す">${esc(e.lessonNextStep||'')}</textarea></div>
-    <div class="foot-actions">${button(e.lessonReviewed?'復習内容を保存済み ✓':'今日の学びを復習した ✓','finish-lesson','dark')}<span class="status-note">入力内容は端末に自動保存されます。</span></div>
+    <div class="foot-actions">${button(e.lessonReviewed?'復習内容を保存済み ✓':'今日の学びを復習した ✓','finish-lesson','dark')}<span class="status-note" data-local-save-hint>入力内容は端末に自動保存されます。</span></div>
     <div class="line"></div><details class="lesson-catalog"><summary>学びライブラリから別のテーマを選ぶ <span class="lesson-count">（${data.lessons.length}件）</span></summary><p class="sync-small">表示するテーマを切り替えても入力済みの文章は保持されます。テーマの切替は今日の記録にのみ反映されます。</p><div class="lesson-list">${data.lessons.map(it=>`<button type="button" class="lesson-pick ${l.id===it.id?'active':''}" data-lesson-id="${esc(it.id)}"><div><span>${esc(it.day)}</span><div style="font-size:13px;font-weight:750">${esc(it.title)}</div></div>${l.id===it.id?'✓':'›'}</button>`).join('')}</div></details></section>`;
   }
   function renderHome(){const mainGoal=featuredGoal(true);const today=jstToday();const e=data.entries[today]||{};const entries=Object.entries(data.entries).filter(([d])=>d<=today);const done=entries.filter(([,x])=>x.minimumDone).length;const planned=entries.filter(([,x])=>isPlanned(x)).length;const reviewed=entries.filter(([,x])=>x.reviewed).length;const days=Array.from({length:7},(_,i)=>dayShift(today,i-6));let bars=days.map(d=>{let x=data.entries[d];let cl=x?.minimumDone?'did':isPlanned(x)?'planned':'';let h=x?.minimumDone?67:isPlanned(x)?29:7;return `<div class="bar-col ${d===today?'today':''}" title="${esc(formatDate(d))}：${esc(status(x)[0])}"><div class="bar-area"><div class="bar ${cl}" style="height:${h}px"></div></div><div class="bar-label">${esc(formatDate(d,{weekday:true}).match(/\((.?)\)/)?.[1]||new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',weekday:'short'}).format(new Date(d+'T12:00:00+09:00')))}</div></div>`}).join('');const latestGrowth=entries.filter(([,x])=>txt(x.growth)).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,2);
@@ -291,12 +293,12 @@
     ${field('futureAction','3. 未来の自分が「今日の俺、よくやった」と思う行動は？','例：気になっていたことを、まず一度試す。')}</section>
     <section class="form-panel"><div class="form-heading"><div class="stepno">02</div><div><h3>今日の行動を決める</h3><p>価値のある行動と、忙しい日でもできる小さな完了ライン。</p></div></div><div class="important">${field('valuableAction','◎ 今日、GOALに向かって一番価値のある行動は？','例：試作アプリを家族に実際に使ってもらう。','「やることの量」よりも、ゴールへの価値を意識しよう。',2)}${field('minimumAction','● 忙しくても実行できる最低限の完了ラインは？','例：家族にアプリを見せて、感想を1つ聞く。','「これなら必ず取り組める」という小ささでOK。',2)}</div>
     <div class="form-heading"><div class="stepno">03</div><div><h3>行動しない未来も認識する</h3><p>最後の問い。そこから自分の選択を決めよう。</p></div></div>${field('withoutAction','4. 今日の行動をしなかったら、どんな未来が続く？','例：アイデアだけ増え、使ってもらう経験が積み上がらない。','自分を責めるためではなく、今の一歩を選びやすくするための問い。')}
-    </section>${renderMorningGoalIdea()}<div class="foot-actions">${button('今日の行動を確認する →','confirm-morning','dark')}<span class="status-note">入力内容は自動保存されます。</span></div></div>`;
+    </section>${renderMorningGoalIdea()}<div class="foot-actions">${button('今日の行動を確認する →','confirm-morning','dark')}<span class="status-note" data-local-save-hint>入力内容は自動保存されます。</span></div></div>`;
   }
   function renderEvening(){const e=entry();const hasPlan=isPlanned(e);return header('今日の一歩を、成長に変える。','できた／できなかった、だけで終わらせない振り返り。')+
     `<div class="stack"><div class="info">🐱 ChatGPTで『今日の振り返りを始めよう』と話して、最後に『今日の振り返りを保存して』。その後、${button('Google連携から取り込む ↻','go-sync','outline')} を押せば、この画面に反映されます。<br><span class="sync-small">※接続先シートへの保存後に取り込めます。アプリでの編集は「Google連携 → 差分を確認（読み取りのみ） → 確認した差分を同期」から明示的に書き戻せます。</span></div>${renderLessonReview()}<section class="form-panel"><div class="panelh"><h3>今日の行動計画</h3>${statusTag(e)}</div>${hasPlan?`<div class="focus-card"><span class="section-label">MOST VALUABLE ACTION</span><p>${esc(e.valuableAction)}</p><div class="line" style="margin:10px 0"></div><span class="label-mini">最低限の完了ライン</span><p style="font-size:13px">${esc(e.minimumAction)}</p></div>`:`<p class="empty">今日の行動計画はまだ設定されていません。まず朝のワークで決めることもできます。</p>${button('朝のワークを開く →','go-morning','secondary')}`}
     <label class="checkbox-line"><input type="checkbox" data-check="minimumDone" ${e.minimumDone?'checked':''}><span><strong>最低限の完了ラインを達成した</strong><small>小さくても、行動できた自分を認めよう。</small></span></label><label class="checkbox-line"><input type="checkbox" data-check="valuableDone" ${e.valuableDone?'checked':''}><span><strong>一番価値のある行動を実行した</strong><small>完璧な成果でなくても「実行した」ならチェック。</small></span></label></section>
-    <section class="form-panel"><div class="form-heading"><div class="stepno">✦</div><div><h3>昨日までの自分との差分</h3><p>結果だけでなく、行動と思考の変化を記録する。</p></div></div>${field('achievement','今日、実際に何ができた？','例：動く試作版を完成させて、操作してもらった。')}${field('growth','以前の自分にはできなかったことで、今日できたことは？','例：完璧を目指す前に、まず人に使ってもらえた。','小さな変化も、未来の自分を信じる根拠になる。')}${field('tomorrow','明日の自分に渡したい、次の一歩は？','例：使いにくかった点を1つ直す。', '',2)}<div class="foot-actions">${button(e.reviewed?'振り返りを更新する ✓':'今日の振り返りを完了','finish-review','dark')}${button('成長の記録を見る →','go-history','outline')}<span class="status-note">記録は自動保存されます。</span></div></section></div>`;
+    <section class="form-panel"><div class="form-heading"><div class="stepno">✦</div><div><h3>昨日までの自分との差分</h3><p>結果だけでなく、行動と思考の変化を記録する。</p></div></div>${field('achievement','今日、実際に何ができた？','例：動く試作版を完成させて、操作してもらった。')}${field('growth','以前の自分にはできなかったことで、今日できたことは？','例：完璧を目指す前に、まず人に使ってもらえた。','小さな変化も、未来の自分を信じる根拠になる。')}${field('tomorrow','明日の自分に渡したい、次の一歩は？','例：使いにくかった点を1つ直す。', '',2)}<div class="foot-actions">${button(e.reviewed?'振り返りを更新する ✓':'今日の振り返りを完了','finish-review','dark')}${button('成長の記録を見る →','go-history','outline')}<span class="status-note" data-local-save-hint>記録は自動保存されます。</span></div></section></div>`;
   }
   function renderHistory(){
     const dates=Object.keys(data.entries).filter(d=>hasMorning(data.entries[d])||data.entries[d].reviewed||data.entries[d].minimumDone||txt(data.entries[d].growth)||txt(data.entries[d].achievement)||data.entries[d].lessonReviewed||txt(data.entries[d].lessonReflection)||txt(data.entries[d].lessonNextStep)).sort().reverse();
@@ -452,6 +454,7 @@
     }
   }
   async function saveLocalChangesToSheets(){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(syncReview){applyReviewedSync();return;}
     if(!googleToken){startGoogleSync();return;}
     fetchSheetRows();
@@ -489,7 +492,7 @@
   function syncEvidenceTime(at){return new Date(at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})+'（日本時間）';}
   function syncEvidenceLines(){
     const evidence=syncDisplayForSheet();
-    const local=storageError?'端末保存：失敗または未確認。ページを閉じずにJSONバックアップを書き出してください。'
+    const local=typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()?'端末保存：このタブの保存は保留中。入力を残しています。':storageError?'端末保存：失敗または未確認。ページを閉じずにJSONバックアップを書き出してください。'
       :localSaveEvidence==='saved'?'端末保存：保存済み（このブラウザー）。'
       :localSaveEvidence==='loaded'?'端末保存：保存されていた記録を読み込みました。'
       :'端末保存：まだ保存していません。入力するとこのブラウザーに保存します。';
@@ -519,7 +522,8 @@
     if(!el)return;
     if(autoWriteToken&&Date.now()>=autoTokenExpiresAt){autoWriteToken=false;googleToken='';}
     let message='',action=button('Google連携を確認','go-sync','outline'),style='';
-    if(storageError){style='error';message='端末への保存を確認できません。入力を残しています。';action=button('端末保存を再試行','retry-local-save','outline')+button('JSONで退避','export','outline');}
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){style='warning';const state=tabGuard.state();message=tabGuardError||(!state.supported?'このブラウザーでは複数タブの安全な保存を利用できません。最新ブラウザーで開いてください。':state.waiting?'別のタブの処理完了を待っています。入力は残しています。':'別のタブの記録を守るため、このタブの保存・同期を保留しています。入力は残しています。');action=(state.supported&&!state.waiting?button('入力を残してこのタブで続ける','resume-tab-edit','outline'):'')+button('入力と別タブの退避をJSONで保存','export-tab-rescue','outline');}
+    else if(storageError){style='error';message='端末への保存を確認できません。入力を残しています。';action=button('端末保存を再試行','retry-local-save','outline')+button('JSONで退避','export','outline');}
     else if(autoSyncBlocked){style='error';message=syncStatusText||'自動連係を停止中。接続や容量を確認して再試行してください。';action=button('自動連係を再試行','reconnect-auto-sync','outline');}
     else if(!navigator.onLine){style='warning';message='オフライン。Google Sheetsの現在の状態は確認できません。'+(autoSyncEnabled?'オンライン復帰後に安全確認を試みます。':'自動同期はオフです。');}
     else if(!autoSyncEnabled){style='warning';message='自動連係オフ。Google連携から両方残す自動連係を開始できます。';}
@@ -534,12 +538,13 @@
     else if(manualSyncReviewVisible()){message='手動確認中のため自動連係を一時待機しています。確認を閉じるか別の画面へ移ると再開します。';}
     else if(autoPending()){message='自動同期オン。端末の変更を安全確認してから送信します。';}
     else{message='自動連係オン。Sheetsの更新を取り込み、異なる内容は両方残します。';}
+    for(const hint of document.querySelectorAll?.('[data-local-save-hint]')||[])hint.textContent=typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()?'このタブの保存は保留中です。画面上部から切り替えてください。':storageError?'まだ保存できていません。ページを閉じずに保存を再試行してください。':'入力内容は端末に自動保存されます。';
     el.hidden=false;el.className='auto-sync-notice'+(style?' '+style:'');
     const detailsOpen=el.querySelector?.('details')?.open;
     const lines=syncEvidenceLines();
     const markup='<div><strong>'+esc(message)+'</strong><div>'+esc(lines[0])+'</div>'+
       '<details class="sync-evidence-details"'+(detailsOpen?' open=""':'')+'><summary>Sheetsへの送信・変更確認・端末専用データ</summary>'+
-      lines.slice(1).map(line=>'<p class="sync-small">'+esc(line)+'</p>').join('')+'</details></div>'+action;
+      lines.slice(1).map(line=>'<p class="sync-small">'+esc(line)+'</p>').join('')+(typeof tabGuard!=='undefined'&&tabGuard?button('入力と別タブの退避をJSONで保存','export-tab-rescue','outline'):'')+'</details></div>'+action;
     if(el.innerHTML!==markup)el.innerHTML=markup;
     const panel=document.getElementById('syncEvidence');
     const detailMarkup=lines.map(line=>'<p>'+esc(line)+'</p>').join('');
@@ -574,12 +579,14 @@
   }
   function scheduleAutoSave(){
     updateAutoSyncNotice();
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready())return;
     if(storageError||!autoSyncEnabled)return;
     if(autoSyncBlocked||!autoWriteToken||!googleToken||!autoPending())return;
     clearTimeout(autoSaveTimer);
     autoSaveTimer=setTimeout(()=>{autoSyncTick();},Math.max(1800,autoRetryAfter-Date.now()));
   }
   async function autoCommit(expectedRows){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(storageError||writeBusy||syncBusy||syncAuthBusy||autoAuthBusy||!autoWriteToken||!googleToken)return;
     const sheetId=txt(syncConfig.sheetId);
     writeBusy=true;
@@ -618,6 +625,7 @@
     }
   }
   async function autoSyncTick(){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(storageError||!autoSyncEnabled||backupRestoreSyncGuard||autoSyncBlocked||manualSyncReviewVisible()||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy||document.hidden||Date.now()<autoRetryAfter)return;
     const sheetId=txt(syncConfig.sheetId);
     autoSyncTickBusy=true;
@@ -1215,6 +1223,7 @@
     syncReview=null;syncReviewChoices={};goalReviewChoices={};
   }
   async function fetchSheetRows(scope='recovery'){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
     const sheetId=txt(syncConfig.sheetId);
     if(!/^[A-Za-z0-9_-]{20,}$/.test(sheetId)){syncStatusMessage('先にGoogle連携画面でスプレッドシートIDを入力してください');return;}
@@ -1244,6 +1253,7 @@
     }finally{syncBusy=false;if(sequence===syncReviewSequence)pendingManualScope='';updateAutoSyncNotice();if(sequence!==syncReviewSequence)autoSyncTick();}
   }
   async function importReviewedSheetsData(){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(!syncReview||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
     const review=syncReview;
     if(JSON.stringify(data)!==review.localSnapshot){
@@ -1311,6 +1321,7 @@
     if(refreshReview)await fetchSheetRows();
   }
   async function importGoalManagementData(){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(!syncReview?.goalRows||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
     const review=syncReview,choices={...goalReviewChoices};
     if(JSON.stringify(data)!==review.localSnapshot){
@@ -1402,6 +1413,7 @@
     }catch(error){syncAuthBusy=false;syncStatusMessage('書き込み許可を確認できません：'+error.message);}
   }
   async function saveGoalManagementChanges(){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(!syncReview?.goalRows||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
     const review=syncReview,choices={...goalReviewChoices};
     if(JSON.stringify(data)!==review.localSnapshot){
@@ -1432,6 +1444,7 @@
       return;
     }
     requestGoalWriteAccess(async()=>{
+      if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
       if(syncBusy||writeBusy)return;
       if(syncReview!==review||tab!=='sync'){autoSyncTick();return;}
       if(JSON.stringify(data)!==review.localSnapshot){clearManualSyncReview();render();syncStatusMessage('認証中に端末のデータが変わりました。「ゴールを同期」から確認し直してください');return;}
@@ -1468,6 +1481,7 @@
     });
   }
   async function applyReviewedSync(){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(!syncReview||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
     const fields=syncReview.groups.flatMap(group=>group.values);
     const pending=fields.filter(field=>!syncReviewChoices[reviewKey(field)]||syncReviewChoices[reviewKey(field)]==='defer');
@@ -1589,6 +1603,7 @@
     tryAutoConnect(true);
   }
   function startGoogleSync(scope='recovery'){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     if(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy)return;
     if(tab!=='sync')return;
     if(scope==='recovery')syncDetailsOpen=true;
@@ -1802,6 +1817,7 @@
     }
   },true);
   function restoreBackupFile(file){
+    if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){updateAutoSyncNotice();return;}
     const sequence=++backupReadSequence;
     if(!file)return;
     if(!Number.isFinite(file.size)||file.size<0){showToast(backupFailureMessage());return;}
@@ -1810,6 +1826,7 @@
     try{reader=new FileReader();}
     catch(error){showToast('バックアップファイルを読み込めませんでした。現在の記録は変更していません。');return;}
     reader.onload=()=>{
+      if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready()){showToast('別のタブで更新されています。切り替えてからバックアップを選び直してください。');return;}
       if(sequence!==backupReadSequence)return;
       let restoredData;
       try{
@@ -1875,9 +1892,76 @@
     input.value='';
     if(file)restoreBackupFile(file);
   },true);
-  document.addEventListener('input',ev=>{const target=ev.target;if(target.matches('[data-entry]')){let field=target.dataset.entry;if(!fieldNames.includes(field))return;entry()[field]=target.value;if(save())scheduleAutoSave();}else if(target.matches('[data-config]')){let k=target.dataset.config;if(syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy){target.value=k==='workerUrl'?cloudWorkerUrl:(syncConfig[k]||'');showToast('同期・認証処理中は接続先を変更できません。処理が終わってから変更してください。');return;}if(k==='workerUrl'){const url=validCloudWorkerUrl(target.value);if(url!==cloudWorkerUrl){cloudWorkerUrl=url;cloudSession='';try{localStorage.setItem(CLOUD_WORKER_KEY,cloudWorkerUrl);localStorage.removeItem(CLOUD_SESSION_KEY);}catch(e){}autoWriteToken=false;googleToken='';googleTokenWritable=false;}return;}if(k!=='clientId'&&k!=='sheetId')return;syncConfig[k]=target.value;googleToken='';googleTokenWritable=false;autoWriteToken=false;autoSyncEnabled=false;clearTimeout(autoSaveTimer);try{localStorage.setItem(AUTO_SYNC_KEY,'0');}catch(e){}saveSyncConfig();if(k==='sheetId'){writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();safeSyncApproved=loadSafeSyncApproval();syncReview=null;syncStatusText='';archiveView=null;}updateAutoSyncNotice();}else if(target.matches('[data-goal]')){let field=target.dataset.goal;if(!Object.prototype.hasOwnProperty.call(data.goal,field))return;data.goal[field]=target.value;save();}});
-  document.addEventListener('change',ev=>{if(GoalProgress.change(progressCtx(),ev))return;const t=ev.target;if(t.matches('[data-goal-theme-filter]')){goalThemeFilter=t.value;render();return;}if(t.matches('[data-check]')){let f=t.dataset.check;if(f!=='minimumDone'&&f!=='valuableDone')return;entry()[f]=t.checked;if(!save())return;scheduleAutoSave();showToast(t.checked?'一歩を記録しました！':'チェックを更新しました。');}else if(t.id==='csvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){syncStatusMessage('CSVファイルが大きすぎます（3MB以下）');return;}const reader=new FileReader();reader.onload=()=>{try{mergeSheetRows(parseCsv(String(reader.result)),'CSV');}catch(e){syncStatusMessage('CSV読み込み失敗：'+e.message);showToast('CSV読み込み失敗：'+e.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='actionSyncCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ファイルが大きすぎます');return;}const sheet=pendingActionCsv;const reader=new FileReader();reader.onload=()=>{try{const n=GoalProgress.importSheet(sheet,parseCsv(String(reader.result)),data,save);render();showToast(sheet+'を'+n+'件取り込んだよ');}catch(err){showToast('CSVの読み込みに失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='goalIdeasCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ゴールの種CSVが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeGoalIdeaRows(parseCsv(String(reader.result)));render();showToast('ゴールの種を読み込みました');}catch(err){showToast('ゴールの種の読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='lessonCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('CSVファイルが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{mergeLessonRows(parseCsv(String(reader.result)),'CSV');}catch(err){showToast('学びの読み込み失敗：'+err.message)}};reader.onerror=()=>showToast('学びのCSVを読み取れませんでした。追加はしていません。同じCSVをもう一度選んでください');reader.onabort=()=>showToast('学びのCSVの読み取りを中止しました。追加はしていません');reader.readAsText(file,'UTF-8');}else if(t.id==='importFile'){const file=t.files?.[0];t.value='';if(file)restoreBackupFile(file);}});
+  document.addEventListener('input',ev=>{const target=ev.target;if(target.matches('[data-entry]')){let field=target.dataset.entry;if(!fieldNames.includes(field))return;entry()[field]=target.value;if(save())scheduleAutoSave();}else if(target.matches('[data-config]')){let k=target.dataset.config;if((typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready())||syncBusy||syncAuthBusy||autoAuthBusy||writeBusy||autoSyncTickBusy){target.value=k==='workerUrl'?cloudWorkerUrl:(syncConfig[k]||'');showToast('同期・認証処理中は接続先を変更できません。処理が終わってから変更してください。');return;}if(k==='workerUrl'){const url=validCloudWorkerUrl(target.value);if(url!==cloudWorkerUrl){cloudWorkerUrl=url;cloudSession='';try{localStorage.setItem(CLOUD_WORKER_KEY,cloudWorkerUrl);localStorage.removeItem(CLOUD_SESSION_KEY);}catch(e){}autoWriteToken=false;googleToken='';googleTokenWritable=false;}return;}if(k!=='clientId'&&k!=='sheetId')return;syncConfig[k]=target.value;googleToken='';googleTokenWritable=false;autoWriteToken=false;autoSyncEnabled=false;clearTimeout(autoSaveTimer);try{localStorage.setItem(AUTO_SYNC_KEY,'0');}catch(e){}saveSyncConfig();if(k==='sheetId'){writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();safeSyncApproved=loadSafeSyncApproval();syncReview=null;syncStatusText='';archiveView=null;}updateAutoSyncNotice();}else if(target.matches('[data-goal]')){let field=target.dataset.goal;if(!Object.prototype.hasOwnProperty.call(data.goal,field))return;data.goal[field]=target.value;save();}});
+  document.addEventListener('change',ev=>{if(GoalProgress.change(progressCtx(),ev))return;const t=ev.target;if(t.matches('[data-goal-theme-filter]')){goalThemeFilter=t.value;render();return;}if(t.matches('[data-check]')){let f=t.dataset.check;if(f!=='minimumDone'&&f!=='valuableDone')return;entry()[f]=t.checked;if(!save())return;scheduleAutoSave();showToast(t.checked?'一歩を記録しました！':'チェックを更新しました。');}else if(t.id==='csvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){syncStatusMessage('CSVファイルが大きすぎます（3MB以下）');return;}const reader=new FileReader();reader.onload=()=>{try{if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready())throw Error('別のタブで更新されています。「このタブで続ける」で切り替えてからファイルを選び直してください。');mergeSheetRows(parseCsv(String(reader.result)),'CSV');}catch(e){syncStatusMessage('CSV読み込み失敗：'+e.message);showToast('CSV読み込み失敗：'+e.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='actionSyncCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ファイルが大きすぎます');return;}const sheet=pendingActionCsv;const reader=new FileReader();reader.onload=()=>{try{if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready())throw Error('別のタブで更新されています。「このタブで続ける」で切り替えてからファイルを選び直してください。');const n=GoalProgress.importSheet(sheet,parseCsv(String(reader.result)),data,save);render();showToast(sheet+'を'+n+'件取り込んだよ');}catch(err){showToast('CSVの読み込みに失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='goalIdeasCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('ゴールの種CSVが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready())throw Error('別のタブで更新されています。「このタブで続ける」で切り替えてからファイルを選び直してください。');mergeGoalIdeaRows(parseCsv(String(reader.result)));render();showToast('ゴールの種を読み込みました');}catch(err){showToast('ゴールの種の読み込み失敗：'+err.message)}};reader.readAsText(file,'UTF-8');}else if(t.id==='lessonCsvFile'){const file=t.files?.[0];t.value='';if(!file)return;if(file.size>3_000_000){showToast('CSVファイルが大きすぎます');return;}const reader=new FileReader();reader.onload=()=>{try{if(typeof tabGuard!=='undefined'&&tabGuard&&!tabGuard.ready())throw Error('別のタブで更新されています。「このタブで続ける」で切り替えてからファイルを選び直してください。');mergeLessonRows(parseCsv(String(reader.result)),'CSV');}catch(err){showToast('学びの読み込み失敗：'+err.message)}};reader.onerror=()=>showToast('学びのCSVを読み取れませんでした。追加はしていません。同じCSVをもう一度選んでください');reader.onabort=()=>showToast('学びのCSVの読み取りを中止しました。追加はしていません');reader.readAsText(file,'UTF-8');}else if(t.id==='importFile'){const file=t.files?.[0];t.value='';if(file)restoreBackupFile(file);}});
   document.addEventListener('click',ev=>{if(GoalProgress.capture(progressCtx(),ev)){scheduleAutoSave();return;}const ideaButton=ev.target.closest('[data-action="copy-goal-question"]');if(ideaButton){const idea=(data.goalIdeas||[]).find(i=>i.id===ideaButton.dataset.ideaId);if(!idea)return;const prompt=goalIdeaPrompt(idea);if(navigator.clipboard?.writeText){navigator.clipboard.writeText(prompt).then(()=>showToast('深掘り用の文章をコピーしました。ChatGPTの会話に貼り付けてね。')).catch(()=>showToast('コピーできませんでした。質問を会話で伝えてね。'));}else showToast('質問をChatGPTの会話で伝えてね。');return;}const goalFilter=ev.target.closest('[data-goal-filter]');if(goalFilter){goalPeriodFilter=goalFilter.dataset.goalFilter;render();return;}const nav=ev.target.closest('[data-nav]');if(nav){go(nav.dataset.nav);return;}const revDate=ev.target.closest('[data-review-date]');if(revDate){go('evening',revDate.dataset.reviewDate);return;}const history=ev.target.closest('[data-date]');if(history){go('morning',history.dataset.date);return;}const pick=ev.target.closest('[data-lesson-id]');if(pick){const l=data.lessons.find(l=>l.id===pick.dataset.lessonId);if(l){const e=entry();const old=lessonFor(activeDate);if(old&&old.id!==l.id){if(!e.lessonNotes||typeof e.lessonNotes!=='object')e.lessonNotes={};e.lessonNotes[old.id]={reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:!!e.lessonReviewed};const existing=e.lessonNotes[l.id]||{};e.lessonReflection=existing.reflection||'';e.lessonNextStep=existing.nextStep||'';e.lessonReviewed=existing.reviewed===true;e.lessonId=l.id;e.lessonTitle=l.title;save();scheduleAutoSave();render();showToast('今日の学びを切り替えました');}}return;}const el=ev.target.closest('[data-action]');if(!el)return;switch(el.dataset.action){case'use-previous-action':usePreviousAction();break;case'read-sync-archive':readSyncArchive();break;case'export-sync-archive':exportArchiveBackup();break;case'open-restored-archive':openRestoredArchive();break;case'copy-sync-archive':copyArchiveDraft(Number(el.dataset.index));break;case'cancel-archive-draft':archiveDraft=null;render();break;case'save-archive-draft':saveArchiveDraft();break;case'retry-local-save':if(save()){scheduleAutoSave();showToast('端末内の記録を再保存しました。編集中のフォームは各画面の保存ボタンで確定してください。');}break;case'go-home':go('home');break;case'go-goal':go('goal');break;case'go-progress':go('progress');break;case'go-morning':go('morning',tab==='evening'?activeDate:null);break;case'go-evening':go('evening',tab==='morning'?activeDate:null);break;case'go-history':go('history');break;case'go-sync':go('sync');break;case'google-sync':startGoogleSync();break;case'reconnect-auto-sync':tryAutoConnect(true);break;case'save-writeback':saveLocalChangesToSheets();break;case'toggle-auto-sync':if(autoSyncEnabled&&autoWriteToken&&!autoSyncBlocked)disableAutoSync();else tryAutoConnect(true);break;case'disable-auto-sync':disableAutoSync();break;case'sync-csv':document.getElementById('csvFile').click();break;case'sync-lessons-csv':document.getElementById('lessonCsvFile').click();break;case'sync-goal-ideas-csv':document.getElementById('goalIdeasCsvFile').click();break;case'sync-action-csv':pendingActionCsv=el.dataset.sheet||'アクション一覧';document.getElementById('actionSyncCsvFile').click();break;case'finish-lesson':{const e=entry();if(!txt(e.lessonReflection)&&!txt(e.lessonNextStep)){showToast('今日の気づきか、明日の実践を1つ書いてね');return;}const previous={lessonId:e.lessonId,lessonReviewed:e.lessonReviewed,lessonNotes:e.lessonNotes};e.lessonId=lessonFor(activeDate).id;e.lessonReviewed=true;e.lessonNotes={...e.lessonNotes,[e.lessonId]:{reflection:e.lessonReflection||'',nextStep:e.lessonNextStep||'',reviewed:true}};if(!save()){Object.assign(e,previous);return;}scheduleAutoSave();render();showToast('今日の学びを復習したね！');break;}case'setup-guide':window.open('https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid?hl=ja','_blank','noopener,noreferrer');break;case'today':go('morning',jstToday());break;case'confirm-morning':if(!isPlanned(entry())){showToast('一番価値のある行動と最低限の完了ラインを記入してね。');return;}if(!save())return;scheduleAutoSave();go('home');showToast('今日の一歩が決まりました！');break;case'finish-review':{let e=entry();if(!e.minimumDone&&!e.valuableDone&&!txt(e.achievement)&&!txt(e.growth)&&!txt(e.tomorrow)){showToast('今日の気づきや、できたことを1つ書いてね。');return;}const wasReviewed=e.reviewed;e.reviewed=true;if(!save()){e.reviewed=wasReviewed;return;}scheduleAutoSave();go('history');showToast('今日の振り返りを記録しました！');break;}case'export':exportData();break;case'import':document.getElementById('importFile').click();break;}});
+  function tabDrafts(){
+    return [...document.querySelectorAll('[data-goal-form],#pg-action-form,#pg-review-form')].flatMap(form=>{
+      const fields=[...form.querySelectorAll('input,textarea,select')].map(el=>{
+        const original=el.tagName==='SELECT'?([...el.options].filter(o=>o.defaultSelected).pop()||el.options[0])?.value:el.defaultValue;
+        const dirty=el.type==='checkbox'||el.type==='radio'?el.checked!==el.defaultChecked:el.value!==(original||'');
+        return {id:el.id,name:el.name,value:el.value,label:el.selectedOptions?.[0]?.textContent||'',checked:el.checked,type:el.type,dirty};
+      });
+      return fields.some(f=>f.dirty)?[{form:form.id||'goal:'+form.dataset.goalId,recordId:form.dataset.recordId||form.dataset.goalId||'',formHtml:form.outerHTML,fields}]:[];
+    });
+  }
+  function restoreTabDrafts(drafts){
+    for(const draft of drafts){
+      const forms=[...document.querySelectorAll('[data-goal-form],#pg-action-form,#pg-review-form')];
+      let form=forms.find(f=>(f.id||'goal:'+f.dataset.goalId)===draft.form);
+      const missing=!form||(form.dataset.recordId||form.dataset.goalId||'')!==draft.recordId;
+      if(missing){
+        const holder=document.createElement('section');holder.className='form-panel';
+        holder.innerHTML='<p>別タブで変更された記録の編集中の入力です。保存ボタンで残せます。</p>'+draft.formHtml;
+        if(form)form.replaceWith(holder);else document.getElementById('app').append(holder);
+        form=holder.querySelector('[data-goal-form],#pg-action-form,#pg-review-form');
+      }
+      for(const field of draft.fields){
+        const el=form&&[...form.querySelectorAll('input,textarea,select')].find(e=>field.id?e.id===field.id:e.name===field.name);
+        if(!el)continue;
+        const missingOption=el.tagName==='SELECT'&&field.value&&![...el.options].some(o=>o.value===field.value);
+        if(!missing&&!field.dirty&&!missingOption)continue;
+        if(missingOption){const option=document.createElement('option');option.value=field.value;option.textContent=(field.label||field.value)+'（元の選択）';el.append(option);}
+        el.value=field.value;if(field.type==='checkbox'||field.type==='radio')el.checked=field.checked;
+        for(let node=el.parentElement;node;node=node.parentElement)if(node.tagName==='DETAILS')node.open=true;
+      }
+    }
+  }
+  async function resumeTabEditing(){
+    if(!tabGuard||syncBusy||writeBusy||autoSyncTickBusy||syncAuthBusy||autoAuthBusy)return;
+    tabGuardError='';
+    try{
+      if(!await tabGuard.request())return;
+      // Capture after waiting, so typing during a pending handover is retained.
+      const drafts=tabDrafts(),raw=localStorage.getItem(KEY),remote=raw?normalize(JSON.parse(raw)):initial();
+      if(raw&&!backupPreservesSource(JSON.parse(raw),remote))throw Error('最新記録を全件保持して読み込めないため切替を停止しました。JSONで退避してください。');
+      const prepared=tabGuard.prepare(data,remote,raw,drafts,archiveDraft);
+      if(!backupPreservesSource(prepared.merged,normalize(prepared.merged)))throw Error('保存件数・文字数の上限を超えるため切替を停止しました。JSONで退避してください。');
+      tabGuard.commit(prepared);data=prepared.merged;storageError=false;localSaveEvidence='saved';
+      const latestConfig=loadSyncConfig();
+      const latestWorker=validCloudWorkerUrl(localStorage.getItem(CLOUD_WORKER_KEY)),latestSession=localStorage.getItem(CLOUD_SESSION_KEY)||'';
+      if(latestConfig.sheetId!==syncConfig.sheetId||latestConfig.clientId!==syncConfig.clientId||latestWorker!==cloudWorkerUrl||latestSession!==cloudSession){googleToken='';googleTokenWritable=false;autoWriteToken=false;autoTokenExpiresAt=0;}
+      cloudWorkerUrl=latestWorker;cloudSession=latestSession;
+      syncConfig=latestConfig;writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();safeSyncApproved=loadSafeSyncApproval();
+      backupRestoreSyncGuard=localStorage.getItem(BACKUP_RESTORE_SYNC_GUARD_KEY)==='1';
+      autoSyncEnabled=!backupRestoreSyncGuard&&localStorage.getItem(AUTO_SYNC_KEY)==='1';
+      clearManualSyncReview();
+      render({preserveDisclosures:true});restoreTabDrafts(drafts);
+      showToast('このタブで続けられます。最新記録と入力を残しました。'+(drafts.length?'編集中のフォームは保存ボタンで確定してください。':'')+(prepared.conflicts.length?'異なる元の記録はJSON退避に保管しました。':''));
+    }catch(error){tabGuardError=error.name==='AbortError'?'別のタブで処理中です。処理が終わってからもう一度お試しください。':error.message;showToast(tabGuardError);}
+    updateAutoSyncNotice();
+  }
+  function exportTabRescue(){
+    try{
+      const json=JSON.stringify({format:'goal-tab-rescue-v1',recoveryOnly:true,createdAt:new Date().toISOString(),thisTab:data,drafts:tabDrafts(),archiveDraft,latestStored:localStorage.getItem(KEY),rescues:tabGuard.rescues()});
+      downloadBackupJson(json,true);showToast('入力と別タブの退避記録を救出用JSONで保存します。通常復元用ではありません。');
+    }catch(error){showToast('退避を書き出せませんでした。ページを閉じずに再試行してください。');}
+  }
+  document.addEventListener('click',ev=>{
+    const action=ev.target.closest?.('[data-action]')?.dataset.action;
+    if(action==='resume-tab-edit'){ev.preventDefault();resumeTabEditing();}
+    if(action==='export-tab-rescue'){ev.preventDefault();exportTabRescue();}
+  });
   data=load();syncConfig=loadSyncConfig();writeBaseline=loadWriteBaseline();goalSyncBaseline=loadGoalSyncBaseline();
   try{cloudWorkerUrl=validCloudWorkerUrl(localStorage.getItem(CLOUD_WORKER_KEY));cloudSession=localStorage.getItem(CLOUD_SESSION_KEY)||'';}catch(e){}
   try{
@@ -1887,6 +1971,12 @@
     autoSyncEnabled=!backupRestoreSyncGuard&&localStorage.getItem(AUTO_SYNC_KEY)==='1';
     if(!autoSyncEnabled)localStorage.setItem(AUTO_SYNC_KEY,'0');
   }catch(e){autoSyncEnabled=false;}
+  tabGuard=GoalTabStorage.create({storage:localStorage,locks:navigator.locks,key:KEY,raw:loadedTabRaw,data,blocked:storageError,
+    onChange:()=>updateAutoSyncNotice(),busy:()=>syncBusy||writeBusy||autoSyncTickBusy||syncAuthBusy||autoAuthBusy});
+  window.addEventListener('storage',event=>{tabGuard.changed(event);updateAutoSyncNotice();});
+  window.addEventListener('pagehide',()=>{if(!syncBusy&&!writeBusy&&!autoSyncTickBusy&&!syncAuthBusy&&!autoAuthBusy)tabGuard.release();});
+  window.addEventListener('pageshow',()=>tabGuard.acquire().catch(error=>{tabGuardError=error.message;updateAutoSyncNotice();}));
+  tabGuard.acquire().catch(error=>{tabGuardError=error.message;updateAutoSyncNotice();});
   render();
   setInterval(checkDayRollover,30000);
   window.addEventListener('focus',checkDayRollover);

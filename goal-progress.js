@@ -120,7 +120,7 @@ window.GoalProgress = (function () {
     fields+=area('成果指標・完了条件','expected',a.expected||'','何をもって完了とする？');fields+=area('進捗・実際にできたこと','note',a.note||'','結果や次に必要なことを追記しよう');
     fields+='<details class="pg-details"><summary>現状と課題も記録する</summary>'+area('事実・現在地','facts',a.facts||'')+area('GOALとのGAP','gap',a.gap||'')+area('技術課題（知識・方法・仕組み）','technical',a.technical||'')+area('適応課題（習慣・向き合い方・選択）','adaptive',a.adaptive||'')+'</details>';
     if(a.id) fields+=input('変更理由（変更履歴に記録）','reason','','text');
-    return '<details class="panel ui-group"'+(a.id||prefillIdea?' open':'')+'><summary>'+(a.id?'アクションを編集':'＋ 新しいアクションを登録')+'</summary><section class="ui-body" id="pg-action-form">'+
+    return '<details class="panel ui-group"'+(a.id||prefillIdea?' open':'')+'><summary>'+(a.id?'アクションを編集':'＋ 新しいアクションを登録')+'</summary><section class="ui-body" id="pg-action-form" data-record-id="'+html(a.id||'')+'">'+
       '<p class="smallmuted">ゴールに関連付けられます。新しいゴールをGoogle Sheetsから同期した後でも選択可能です。</p>'+fields+
       '<div class="foot-actions">'+button(a.id?'変更を保存':'アクションを追加','save-action','','dark')+(a.id?button('編集をやめる','cancel-edit'):'')+'</div></section></details>';
   }
@@ -162,7 +162,7 @@ window.GoalProgress = (function () {
   }
   function renderReview(ctx) {
     var data=ctx.data,p=data.progress,week=selectedWeek||weekMonday(today()),r=selectedReview(data);
-    var htmlPart='<section class="form-panel" id="pg-review-form"><div class="panelh"><h3>週次ゴールレビュー</h3><span class="chip">VISION → GAP → ACTION</span></div>';
+    var htmlPart='<section class="form-panel" id="pg-review-form" data-record-id="'+html(r.id||'')+'"><div class="panelh"><h3>週次ゴールレビュー</h3><span class="chip">VISION → GAP → ACTION</span></div>';
     htmlPart+='<p class="smallmuted">日々の朝・夜の記録を見ながら、事実と課題を整理しよう。同じ週・同じゴールの更新は履歴を残します。</p>';
     htmlPart+='<div class="pg-columns"><div class="pg-field"><label>対象週（月曜日）<input type="date" id="pg-week" value="'+html(week)+'"></label></div><div class="pg-field"><label>対象ゴール'+goalSelect(data.goals||[],selectedGoal,'reviewGoalId')+'</label></div></div>';
     var dates=Object.keys(data.entries||{}).filter(function(d){return d>=week && d<=shiftWeek(week,6);}).sort();
