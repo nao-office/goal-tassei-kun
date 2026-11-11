@@ -80,6 +80,7 @@ const server=http.createServer((req,res)=>{try{
     }
     await seed(plans(0));await page.locator('[data-nav="progress"]').click();
     await page.locator('[data-progress-action="mode"][data-mode="plan"]').click();
+    await page.locator('summary').filter({hasText:'週間計画（Google Sheets）'}).click();
     const text=await page.locator('#app').innerText();assert.match(text,/対応項目.*自動連係/);assert.match(text,/週間計画は自動連係されません/);assert.doesNotMatch(text,/Google Sheetsへは書き戻されません/);
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(errors,[]);
     fs.mkdirSync(root+'/test-results',{recursive:true});await page.screenshot({path:root+'/test-results/progress-safety-'+width+'.png',fullPage:true});
