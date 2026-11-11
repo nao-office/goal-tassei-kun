@@ -6,6 +6,9 @@ on:
       - 'index.html'
       - 'cloud-auth.js'
       - 'cloud-auth.test.js'
+      - 'tab-storage.js'
+      - 'tab-storage.test.js'
+      - 'browser-tab-storage.test.cjs'
       - 'daily-flow.test.js'
       - 'morning-flow.test.js'
       - 'sync-status.test.js'
@@ -38,6 +41,9 @@ on:
       - 'index.html'
       - 'cloud-auth.js'
       - 'cloud-auth.test.js'
+      - 'tab-storage.js'
+      - 'tab-storage.test.js'
+      - 'browser-tab-storage.test.cjs'
       - 'daily-flow.test.js'
       - 'morning-flow.test.js'
       - 'sync-status.test.js'
@@ -72,7 +78,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test OAuth and synchronization safety
-        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js archive-tools.test.js lesson-csv.test.js
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js archive-tools.test.js lesson-csv.test.js tab-storage.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -85,6 +91,7 @@ jobs:
           new Function(fs.readFileSync('goal-management-sync.js','utf8'));
           new Function(fs.readFileSync('goal-progress.js','utf8'));
           new Function(fs.readFileSync('cloud-auth.js','utf8'));
+          new Function(fs.readFileSync('tab-storage.js','utf8'));
           new Function(fs.readFileSync('keep-both-sync.js','utf8'));
           console.log('index.html JavaScript syntax OK');
           NODE
@@ -113,6 +120,10 @@ jobs:
         run: node browser-archive.test.cjs
       - name: Test lesson CSV import safety with synthetic data only
         run: node browser-lesson-csv.test.cjs
+      - name: Test shared-origin tab ownership and draft preservation
+        run: |
+          node browser-tab-storage.test.cjs
+          TAB_BROWSER=webkit node browser-tab-storage.test.cjs
       - name: Save browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
