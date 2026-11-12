@@ -83,6 +83,7 @@ test('goal ideas distinguish an empty collection from a collection with no pendi
 
 function navigationFixture(extra={}){
  const c=fixture(extra);
+ c.confirmDiscardFormEdits=()=>true; // No unsaved editor in this date fixture.
  c.scrollTo=()=>{};c.tab='home';c.clearManualSyncReview=()=>{};c.autoSyncTick=()=>{};
  vm.runInContext(source('go'),c);
  return c;
