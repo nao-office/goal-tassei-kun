@@ -14,6 +14,7 @@ window.GoalProgress = (function () {
   var ideaKeys=['id','date','theme','goalId','title','why','when','question','status','source','updated','memo'];
   var planKeys=['id','week','goalId','theme','focus','actionId','keyAction','minimum','expected','status','result','gap','technical','adaptive','nextStep','updated','source'];
   var reviewKeys = ['id','week','goalId','facts','gap','technical','adaptive','learning','focus','keyAction','minimum','createdAt','updatedAt'];
+  var RECORD_LIMITS = {actions:1000,reviews:520,sheetActions:1400,actionIdeas:1400,weekPlans:800,sheetHistory:1800};
   function cleanRecord(source, keys) {
     var result = {}; keys.forEach(function(k){result[k] = text(source[k],k==='id'||k==='goalId'?180:4000);});
     return result;
@@ -21,15 +22,15 @@ window.GoalProgress = (function () {
   function normalize(p) {
     var base = empty();
     if (!p || typeof p !== 'object' || Array.isArray(p)) return base;
-    [['actions',actionKeys,1000],['reviews',reviewKeys,520],['sheetActions',actionKeys,1400],['actionIdeas',ideaKeys,1400],['weekPlans',planKeys,800]].forEach(function(spec){
-      base[spec[0]] = (Array.isArray(p[spec[0]]) ? p[spec[0]] : []).slice(0,spec[2]).filter(function(x){return x && typeof x==='object' && !Array.isArray(x);}).map(function(x){return cleanRecord(x,spec[1]);}).filter(function(x){return x.id;});
+    [['actions',actionKeys],['reviews',reviewKeys],['sheetActions',actionKeys],['actionIdeas',ideaKeys],['weekPlans',planKeys]].forEach(function(spec){
+      base[spec[0]] = (Array.isArray(p[spec[0]]) ? p[spec[0]] : []).slice(0,RECORD_LIMITS[spec[0]]).filter(function(x){return x && typeof x==='object' && !Array.isArray(x);}).map(function(x){return cleanRecord(x,spec[1]);}).filter(function(x){return x.id;});
     });
     [['actionHistory',actionKeys,2500],['reviewHistory',reviewKeys,1500]].forEach(function(spec){
       base[spec[0]] = (Array.isArray(p[spec[0]]) ? p[spec[0]] : []).slice(-spec[2]).filter(function(x){return x && typeof x==='object' && !Array.isArray(x);}).map(function(x){
         return {at:text(x.at,100),id:text(x.id,180),reason:text(x.reason,1000),before:x.before&&typeof x.before==='object'?cleanRecord(x.before,spec[1]):null,after:x.after&&typeof x.after==='object'?cleanRecord(x.after,spec[1]):null};
       });
     });
-    base.sheetHistory=(Array.isArray(p.sheetHistory)?p.sheetHistory:[]).slice(0,1800).filter(x=>x&&typeof x==='object').map(x=>({at:text(x.at),id:text(x.id),reason:text(x.reason),before:null,after:x.after&&typeof x.after==='object'?cleanRecord(x.after,actionKeys):null,kind:'Google Sheets'}));
+    base.sheetHistory=(Array.isArray(p.sheetHistory)?p.sheetHistory:[]).slice(0,RECORD_LIMITS.sheetHistory).filter(x=>x&&typeof x==='object').map(x=>({at:text(x.at),id:text(x.id),reason:text(x.reason),before:null,after:x.after&&typeof x.after==='object'?cleanRecord(x.after,actionKeys):null,kind:'Google Sheets'}));
     return base;
   }
   function actionList(data){var map=new Map();(data.progress.sheetActions||[]).forEach(a=>map.set(a.id,a));(data.progress.actions||[]).forEach(a=>map.set(a.id,a));return [...map.values()];}
@@ -43,31 +44,47 @@ window.GoalProgress = (function () {
   function importSheet(name,rows,data,save){
     var headers=REMOTE_HEADERS[name];
     if(!headers)throw Error('不明なシート名');
-    if(!Array.isArray(rows)||!rows.length||headers.some((h,i)=>String(rows[0][i]??'').trim()!==h))throw Error(name+'の見出しが一致しません');
-    if(!data.progress)data.progress=empty();
-    var arr=rows.slice(1,1401).filter(r=>String(r[0]??'').trim()).map(function(r){
-      var v=i=>text(r[i]||'');
+    if(!Array.isArray(rows)||!Array.isArray(rows[0])||headers.some((h,i)=>String(rows[0][i]??'').trim()!==h))throw Error(name+'の見出しが一致しません');
+    if(rows.length-1>1400)throw Error('一度に読み込めるCSVは最大1,400行です。今回は追加していません');
+    var idColumns={'アクションの種':[0,3],'アクション一覧':[0,1],'週間計画':[0,2],'アクション履歴':[2,3]}[name];
+    var incoming=rows.slice(1).filter(function(r,index){
+      if(!Array.isArray(r))throw Error((index+2)+'行目の形式が正しくありません。今回は追加していません');
+      if(!String(r[0]??'').trim())return false;
+      headers.forEach(function(_,column){
+        var limit=idColumns.includes(column)?180:4000;
+        if(String(r[column]??'').length>limit)throw Error((index+2)+'行目の「'+headers[column]+'」は'+limit+'文字以内にしてください。今回は追加していません');
+      });
+      if(name==='アクション履歴'&&!String(r[2]??'').trim())throw Error((index+2)+'行目のアクションIDがありません。今回は追加していません');
+      return true;
+    });
+    var arr=incoming.map(function(r){
+      var v=i=>String(r[i]??'');
       if(name==='アクションの種')return {id:v(0),date:v(1),theme:v(2),goalId:v(3),title:v(4),why:v(5),when:v(6),question:v(7),status:v(8),source:v(9),updated:v(10),memo:v(11)};
       if(name==='アクション一覧')return {id:v(0),goalId:v(1),theme:v(2),title:v(3),minimum:v(4),expected:v(5),start:v(6),due:v(7),horizon:v(8),priority:v(9),status:v(10)||'未着手',note:v(11),technical:v(12),adaptive:v(13),createdAt:v(14),updatedAt:v(15),completedAt:v(16),source:v(17),origin:'Google Sheets'};
       if(name==='週間計画')return {id:v(0),week:v(1),goalId:v(2),theme:v(3),focus:v(4),actionId:v(5),keyAction:v(6),minimum:v(7),expected:v(8),status:v(9),result:v(10),gap:v(11),technical:v(12),adaptive:v(13),nextStep:v(14),updated:v(15),source:v(16)};
       return {at:v(0),kind:v(1),id:v(2),reason:v(20),before:null,after:{id:v(2),goalId:v(3),theme:v(4),title:v(5),minimum:v(6),expected:v(7),start:v(8),due:v(9),horizon:v(10),priority:v(11),status:v(12),note:v(13),technical:v(14),adaptive:v(15),createdAt:v(16),updatedAt:v(17),completedAt:v(18),source:v(19)}};
     });
     var prop={'アクションの種':'actionIdeas','アクション一覧':'sheetActions','アクション履歴':'sheetHistory','週間計画':'weekPlans'}[name];
-    var existing=Array.isArray(data.progress[prop])?data.progress[prop]:[];
+    var previousProgress=data.progress,progress=data.progress||empty(),existing=Array.isArray(progress[prop])?progress[prop]:[],additions;
     if(prop==='sheetHistory'){
       var signatures=new Set(existing.map(function(x){return [x.at||'',x.id||'',x.reason||''].join('\u0001');}));
-      data.progress[prop]=existing.concat(arr.filter(function(x){
+      additions=arr.filter(function(x){
         var signature=[x.at||'',x.id||'',x.reason||''].join('\u0001');
         if(signatures.has(signature))return false;
         signatures.add(signature);return true;
-      }));
+      });
     }else{
-      var byId=new Map(existing.filter(function(x){return x&&x.id;}).map(function(x){return [x.id,x];}));
-      arr.forEach(function(x){if(!byId.has(x.id))byId.set(x.id,x);});
-      data.progress[prop]=Array.from(byId.values());
+      var ids=new Set(existing.filter(function(x){return x&&x.id;}).map(function(x){return x.id;}));
+      additions=arr.filter(function(x){if(ids.has(x.id))return false;ids.add(x.id);return true;});
     }
-    if(!save())throw Error('端末への同期結果保存に失敗しました');
-    return arr.length;
+    if(!additions.length)return 0;
+    if(existing.length+additions.length>RECORD_LIMITS[prop])throw Error(name+'は最大'+RECORD_LIMITS[prop]+'件です（登録済み'+existing.length+'件・新規'+additions.length+'件）。上限を超えるため、今回は追加していません');
+    // Validate first, then commit once. A failed write must not leave imported
+    // rows in memory for an unrelated later save to persist.
+    var previousList=progress[prop];progress[prop]=existing.concat(additions);data.progress=progress;
+    try{if(!save())throw Error('端末に保存できなかったため、今回は追加していません。同じCSVをもう一度選んでください');}
+    catch(error){if(previousList===undefined)delete progress[prop];else progress[prop]=previousList;if(previousProgress===undefined)delete data.progress;else data.progress=previousProgress;throw error;}
+    return additions.length;
   }
   function sectionCard(title,detail,actions) {
     return '<article class="pg-week-card"><strong>'+html(title||'名称未設定')+'</strong>'+
@@ -82,12 +99,12 @@ window.GoalProgress = (function () {
     var h='<section class="form-panel"><div class="panelh"><h3>📅 今週のアクション</h3><span class="chip blue">'+dueThisWeek.length+'件</span></div><p class="smallmuted">'+html(thisWeek)+' 〜 '+html(end)+'。期限・今週指定・週の計画から集計。まだ決めていないアクションは勝手に今週へ入れません。</p>';
     h+=dueThisWeek.length?dueThisWeek.map(a=>sectionCard(a.title,'期限 '+(a.due||'未設定')+' ・ '+a.status+'　'+(a.minimum?'最低ライン：'+a.minimum:''),button('朝のワークに使う','today','data-id="'+html(a.id)+'"','secondary')+button('進捗を更新','edit','data-id="'+html(a.id)+'"'))).join(''):'<p class="empty">今週のアクションはまだ確定していないよ。会話の中から重要な一歩を選ぼう。</p>';
     h+='</section><section class="form-panel"><div class="panelh"><h3>⏳ 期限を過ぎた未完了アクション</h3><span class="chip gray">'+overdue.length+'件</span></div>'+(overdue.length?overdue.map(a=>sectionCard(a.title,'期限：'+a.due+' ／ 状態：'+(a.status||'未着手'),button('今週に取り組む','plan-this-week','data-id="'+html(a.id)+'"','secondary'))).join(''):'<p class="empty">期限超過のアクションはありません。</p>')+'</section><section class="form-panel"><div class="panelh"><h3>🧭 週間計画（Google Sheets）</h3><span class="chip gray">'+plans.length+'件</span></div>';
-    h+=plans.length?plans.map(w=>sectionCard(w.week+'｜'+(w.focus||'フォーカス未設定'),'最重要：'+(w.keyAction||'未設定')+'\n最低ライン：'+(w.minimum||'未設定')+'\n状態：'+(w.status||'未設定')+'\n'+(w.result?'進捗：'+w.result:''),(w.keyAction?button('朝のワークへ','plan-today','data-id="'+html(w.id)+'"','secondary'):''))).join(''):'<p class="empty">ChatGPTで今週のフォーカスを決めると、Google Sheets同期後にここへ表示できるよ。</p>';
+    h+=plans.length?plans.map(w=>sectionCard(w.week+'｜'+(w.focus||'フォーカス未設定'),'最重要：'+(w.keyAction||'未設定')+'\n最低ライン：'+(w.minimum||'未設定')+'\n状態：'+(w.status||'未設定')+'\n'+(w.result?'進捗：'+w.result:''),(w.keyAction?button('朝のワークへ','plan-today','data-id="'+html(w.id)+'"','secondary'):''))).join(''):'<p class="empty">ChatGPTで今週のフォーカスを決めたら、「Google連携 → 詳細・復旧 → 週間計画CSV」から新しい計画を追加できます。週間計画は自動連係されません。</p>';
     h+='</section><section class="form-panel"><div class="panelh"><h3>🌅 これからのアクション</h3><span class="chip gray">'+next.length+'件</span></div>';
     h+=next.length?next.map(a=>sectionCard(a.title,(a.horizon||'期間未設定')+' ・ 期限 '+(a.due||'未設定')+' ・ '+(a.status||'未着手'),button('今週の計画に入れる','plan-this-week','data-id="'+html(a.id)+'"','secondary')+button('編集','edit','data-id="'+html(a.id)+'"'))).join(''):'<p class="empty">将来のアクションは、期限や期間を決めるとここに現れるよ。</p>';
     h+='</section><section class="form-panel"><div class="panelh"><h3>🌱 会話から見つけたアクションの種</h3><span class="chip gray">'+future.length+'件</span></div><p class="smallmuted">まだ約束や今週の予定にはなっていない候補。次の対話で実行するか決めよう。</p>';
     h+=future.length?future.slice(0,30).map(a=>sectionCard(a.title,(a.why?'目的：'+a.why+'\n':'')+(a.question?'次に考えること：'+a.question+'\n':'')+'状態：'+(a.status||'候補'),button('この候補でアクションを作成','idea-to-action','data-id="'+html(a.id)+'"','secondary'))).join(''):'<p class="empty">ChatGPTで「今後やりたいこと」を話したら、アクションの種に蓄積できるよ。</p>';
-    h+='</section><div class="info">ChatGPTとの会話 → Google Sheets → Google連携でこの画面に反映。アプリで追加・編集したアクションは現時点では<strong>この端末内だけ</strong>に保存され、Google Sheetsへは書き戻されません。</div>';
+    h+='</section><div class="info">アクションの対応項目（名前・最低ライン・期限・状態など）は、「両方残して自動連係」を有効にすると、アプリを開いている間にGoogle Sheetsと送受信します。週間計画・アクション候補・事実・GAP・今週の紐付け・週次レビューなどは<strong>端末専用</strong>です。週間計画と候補は「Google連携 → 詳細・復旧」のCSVから新しいIDを追加でき、既存IDは変更しません。端末を変える前にJSONバックアップを保存してください。</div>';
     return h;
   }
 
@@ -237,9 +254,12 @@ window.GoalProgress = (function () {
     }
     if(kind==='toggle'){
       var a=actionList(ctx.data).find(function(x){return x.id===id;});if(!a)return true;
-      var beforeToggle=Object.assign({},a);a=Object.assign({},a,{status:a.status==='完了'?'未着手':'完了',updatedAt:now(),origin:a.origin==='Google Sheets'?'端末内の変更':(a.origin||'端末内')});a.completedAt=a.status==='完了'?now():'';var localIndex=p.actions.findIndex(x=>x.id===id);if(localIndex>=0)p.actions[localIndex]=a;else p.actions.push(a);
-      p.actionHistory.push({at:now(),id:a.id,reason:'進捗を更新',before:beforeToggle,after:Object.assign({},a)});
-      var toggled=ctx.save();ctx.render();ctx.toast(toggled?'進捗を更新したよ':'この端末に保存できませんでした');return true;
+      var beforeToggle=Object.assign({},a),previousActions=p.actions,previousHistory=p.actionHistory;
+      a=Object.assign({},a,{status:a.status==='完了'?'未着手':'完了',updatedAt:now(),origin:a.origin==='Google Sheets'?'端末内の変更':(a.origin||'端末内')});a.completedAt=a.status==='完了'?now():'';
+      p.actions=p.actions.some(x=>x.id===id)?p.actions.map(x=>x.id===id?a:x):p.actions.concat(a);
+      p.actionHistory=p.actionHistory.concat({at:now(),id:a.id,reason:'進捗を更新',before:beforeToggle,after:Object.assign({},a)});
+      if(!ctx.save()){p.actions=previousActions;p.actionHistory=previousHistory;ctx.toast('この端末に保存できませんでした。状態と履歴は変更していません。同じボタンでもう一度お試しください。');return true;}
+      ctx.render();ctx.toast('進捗を更新したよ');return true;
     }
     if(kind==='today'){
       var a=actionList(ctx.data).find(function(x){return x.id===id;});if(!a)return true;
