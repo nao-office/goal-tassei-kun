@@ -81,3 +81,23 @@ test('weekly view distinguishes synchronized action fields from device-only plan
   assert.match(result,/対応項目.*自動連係/);assert.match(result,/週間計画.*端末専用/);
   assert.doesNotMatch(result,/Google Sheetsへは書き戻されません/);
 });
+
+for(const source of ['actions','sheetActions'])test('weekly planning keeps '+source+' unchanged on repeated failure and records only one successful retry',()=>{
+  const f=fixture(),p=f.data.progress;
+  p[source]=[{id:'a1',title:'架空の計画',status:'未着手',horizon:'1か月',plannedWeek:'',due:'2027-01-15',origin:source==='sheetActions'?'Google Sheets':'端末内'}];
+  p.actionHistory=[{id:'existing',reason:'既存の履歴'}];f.ctx.save();
+  const before=f.stored(),actions=p.actions,history=p.actionHistory,remote=p.sheetActions;let renders=0;f.ctx.render=()=>renders++;
+  f.fail(true);
+  for(let i=0;i<2;i++){
+    f.click('plan-this-week',{id:'a1'});
+    assert.equal(JSON.stringify(f.data),before);assert.equal(f.stored(),before);
+    assert.equal(p.actions,actions);assert.equal(p.actionHistory,history);assert.equal(p.sheetActions,remote);assert.equal(renders,0);
+    assert.match(f.toasts.at(-1),/計画と履歴は変更していません/);
+  }
+  f.fail(false);f.click('plan-this-week',{id:'a1'});
+  const saved=JSON.parse(f.stored()).progress;
+  assert.equal(saved.actions.length,1);assert.equal(saved.actions[0].horizon,'今週');assert.match(saved.actions[0].plannedWeek,/^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(saved.actionHistory.length,2);assert.equal(saved.actionHistory[1].before.horizon,'1か月');assert.equal(renders,1);
+  assert.equal(f.P.normalize(saved).actions[0].plannedWeek,saved.actions[0].plannedWeek);
+  if(source==='sheetActions')assert.equal(saved.sheetActions[0].horizon,'1か月');
+});
