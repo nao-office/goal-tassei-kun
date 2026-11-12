@@ -33,6 +33,8 @@ on:
       - 'goal-progress.js'
       - 'goal-progress.test.js'
       - 'goal-progress-safety.test.js'
+      - 'progress-navigation.test.js'
+      - 'browser-progress-navigation.test.cjs'
       - 'browser-progress-safety.test.cjs'
       - 'README.md'
       - '.github/workflows/cloudflare-auth-tests.yml'
@@ -70,6 +72,8 @@ on:
       - 'goal-progress.js'
       - 'goal-progress.test.js'
       - 'goal-progress-safety.test.js'
+      - 'progress-navigation.test.js'
+      - 'browser-progress-navigation.test.cjs'
       - 'browser-progress-safety.test.cjs'
       - 'README.md'
       - '.github/workflows/cloudflare-auth-tests.yml'
@@ -82,7 +86,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test OAuth and synchronization safety
-        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js goal-progress-safety.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js archive-tools.test.js lesson-csv.test.js tab-storage.test.js
+        run: node --test worker/auth.test.js sheets-writeback.test.js goal-management-sync.test.js goal-progress.test.js goal-progress-safety.test.js progress-navigation.test.js cloud-auth.test.js daily-flow.test.js morning-flow.test.js sync-status.test.js save-failure.test.js backup-safety.test.js keep-both-sync.test.js automatic-app.test.js archive-tools.test.js lesson-csv.test.js tab-storage.test.js
       - name: Parse browser inline script
         run: |
           node - <<'NODE'
@@ -126,6 +130,10 @@ jobs:
         run: node browser-lesson-csv.test.cjs
       - name: Test action completion and progress CSV safety with synthetic data only
         run: node browser-progress-safety.test.cjs
+      - name: Test unsaved editor navigation and weekly plan retries
+        run: |
+          node browser-progress-navigation.test.cjs
+          NAV_BROWSER=webkit node browser-progress-navigation.test.cjs
       - name: Test shared-origin tab ownership and draft preservation
         run: |
           node browser-tab-storage.test.cjs
