@@ -232,13 +232,24 @@ window.GoalProgress = (function () {
   function capture(ctx,event) {
     var el=event.target.closest('[data-progress-action]'); if(!el)return false;
     var p=ctx.data.progress,kind=el.dataset.progressAction,id=el.dataset.id;
+    // Navigation and shortcut actions rebuild the form. Ask before discarding
+    // unsaved input, before changing records or moving to another screen.
+    if(['mode','open-morning','cancel-edit','edit','idea-to-action','plan-today','plan-this-week','toggle','today','open-review','review-to-today'].includes(kind)&&ctx.confirmDiscard&&!ctx.confirmDiscard())return true;
     if(kind==='mode'){mode=el.dataset.mode;ctx.render();return true;}
     if(kind==='open-morning'){ctx.go('morning');return true;}
     if(kind==='cancel-edit'){editing='';prefillIdea=null;ctx.render();return true;}
     if(kind==='edit'){editing=id;prefillIdea=null;mode='actions';ctx.render();document.getElementById('pg-action-form').scrollIntoView({behavior:'smooth'});return true;}
     if(kind==='idea-to-action'){var idea=p.actionIdeas.find(x=>x.id===id);if(!idea)return true;editing='';prefillIdea={title:idea.title,theme:idea.theme,goalId:idea.goalId,expected:idea.why,horizon:idea.when};mode='actions';ctx.render();document.getElementById('pg-action-form').scrollIntoView({behavior:'smooth'});return true;}
     if(kind==='plan-today'){var wp=p.weekPlans.find(x=>x.id===id);if(wp&&wp.keyAction)ctx.toMorning(wp.keyAction,wp.minimum,'',wp.goalId);return true;}
-    if(kind==='plan-this-week'){var a=actionList(ctx.data).find(x=>x.id===id);if(!a)return true;var before=Object.assign({},a),after=Object.assign({},a,{plannedWeek:weekMonday(today()),horizon:'今週',updatedAt:now(),origin:'端末内の変更'});var index=p.actions.findIndex(x=>x.id===id);if(index>=0)p.actions[index]=after;else p.actions.push(after);p.actionHistory.push({at:now(),id,reason:'今週の計画に追加',before,after:Object.assign({},after)});var ok=ctx.save();ctx.render();ctx.toast(ok?'今週の計画に追加したよ':'端末への保存に失敗しました');return true;}
+    if(kind==='plan-this-week'){
+      var a=actionList(ctx.data).find(x=>x.id===id);if(!a)return true;
+      var before=Object.assign({},a),after=Object.assign({},a,{plannedWeek:weekMonday(today()),horizon:'今週',updatedAt:now(),origin:'端末内の変更'});
+      var previousActions=p.actions,previousHistory=p.actionHistory;
+      p.actions=p.actions.some(x=>x.id===id)?p.actions.map(x=>x.id===id?after:x):p.actions.concat(after);
+      p.actionHistory=p.actionHistory.concat({at:now(),id,reason:'今週の計画に追加',before,after:Object.assign({},after)});
+      if(!ctx.save()){p.actions=previousActions;p.actionHistory=previousHistory;ctx.toast('この端末に保存できませんでした。計画と履歴は変更していません。同じボタンでもう一度お試しください。');return true;}
+      ctx.render();ctx.toast('今週の計画に追加したよ');return true;
+    }
     if(kind==='save-action'){
       var form=document.getElementById('pg-action-form'),v=values(form,['title','goalId','minimum','due','priority','status','expected','facts','gap','technical','adaptive','reason','theme','start','horizon','plannedWeek','note']);
       if(!v.title.trim()){ctx.toast('アクション名を入力してね');return true;}
@@ -287,8 +298,8 @@ window.GoalProgress = (function () {
     return false;
   }
   function change(ctx,event) {
-    if(event.target.id==='pg-week'){selectedWeek=weekMonday(event.target.value);ctx.render();return true;}
-    if(event.target.matches('[name="reviewGoalId"]')){selectedGoal=event.target.value;ctx.render();return true;}
+    if(event.target.id==='pg-week'){if(ctx.confirmDiscard&&!ctx.confirmDiscard()){event.target.value=selectedWeek||weekMonday(today());return true;}selectedWeek=weekMonday(event.target.value);ctx.render();return true;}
+    if(event.target.matches('[name="reviewGoalId"]')){if(ctx.confirmDiscard&&!ctx.confirmDiscard()){event.target.value=selectedGoal;return true;}selectedGoal=event.target.value;ctx.render();return true;}
     return false;
   }
   return {empty:empty,normalize:normalize,render:render,capture:capture,change:change,importSheet:importSheet,actionList:actionList,remoteHeaders:REMOTE_HEADERS};
